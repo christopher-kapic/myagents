@@ -21,7 +21,9 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
 - WebSocket route must be registered before CORS middleware to avoid upgrade issues
 - `packages/shared/` follows same pattern as `packages/db/` — exports via `./src/index.ts`, uses `@myagents/config/tsconfig.base.json`
 - Zod v4 `z.record()` requires two arguments: `z.record(z.string(), z.unknown())` (not single-arg like v3)
+- Prisma `Json` fields require `InputJsonValue` type — convert `Record<string, unknown>` via `JSON.parse(JSON.stringify(obj))`
 - Prisma enum types in oRPC handler return values cause TS2742 errors — serialize enums to strings (e.g., `String(agent.type)`) to avoid type portability issues
+- In JSX with `Record<string, unknown>` data: use `String(val)` not `val as string`, and use ternary `val ? <JSX/> : null` instead of `val && <JSX/>`
 - Use `select` over `include` in Prisma queries within oRPC routes to control return shape and prevent type leakage
 - Compound unique constraints can be used for lookups: `prisma.agent.findUnique({ where: { userId_slug: { userId, slug } } })`
 ---
@@ -203,4 +205,79 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - commander supports async action handlers — useful for connecting to server
   - Node ID is auto-generated and persisted in `~/.myagents/config.json` for stable identity across restarts
   - Used kctx `ws` dependency docs for WebSocket client patterns
+---
+
+## 2026-03-18 - US-012
+- Implemented agent auto-detection in CLI with three detection sources:
+  - Hermes: checks `which hermes` binary and `~/.hermes/config.yaml` config file
+  - OpenClaw: checks `which openclaw` binary and `~/.openclaw/config.json` config file
+  - Custom agents: reads from `~/.myagents/agents.yaml` with simple YAML parser (no external dependency)
+- Created `apps/cli/src/scanner.ts` with `scanForAgents()` function returning `DetectedAgent[]`
+- Updated `apps/cli/src/commands/connect.ts` to scan before connecting and register agents on WebSocket open
+- Implemented server-side `agent.register` handler in `apps/server/src/ws.ts`:
+  - Validates slug format ([a-zA-Z0-9-]+)
+  - Upserts agent record using `prisma.agent.upsert` with `userId_slug` compound unique
+  - Sets agent status to "online" and links to the connecting node
+  - Returns agentId, slug, name in response frame
+- Files changed: `apps/cli/src/scanner.ts` (new), `apps/cli/src/commands/connect.ts` (modified), `apps/server/src/ws.ts` (modified)
+- **Learnings for future iterations:**
+  - Prisma `Json` type requires `InputJsonValue` — `Record<string, unknown>` doesn't match directly; use `JSON.parse(JSON.stringify(obj))` to convert
+  - Regex match groups in strict TS are `string | undefined` — check `match?.[1]` and `match[2] !== undefined` before using
+  - Simple YAML parsing (list of objects with flat keys + one level of nesting) works without a YAML library for the agents.yaml format
+  - `execFileSync("which", [cmd])` is safer than `execSync("which " + cmd)` for command detection (avoids shell injection)
+  - Agent registration uses upsert pattern — if agent with same userId+slug exists, it updates; otherwise creates new
+---
+
+## 2026-03-18 - US-013
+- Implemented AgentAdapter interface in `apps/cli/src/adapters/types.ts`: `sendMessage(message, history)` returns `AsyncGenerator<string>`, `getStatus()` returns `Promise<AgentStatus>`
+- Implemented HermesAdapter in `apps/cli/src/adapters/hermes.ts`: invokes `hermes chat -q '<message>' --quiet` subprocess, supports `--toolsets` passthrough from adapterConfig
+- Created adapter registry in `apps/cli/src/adapter-registry.ts` to create adapters based on agent type
+- Updated `apps/cli/src/commands/connect.ts` to:
+  - Create adapters for detected agents on startup
+  - Route incoming `message.send` frames to the correct adapter by agent slug
+  - Stream chunks back via `message.chunk` and finalize with `message.done`
+  - Handle errors gracefully with error messages sent back to the server
+- Files changed: `apps/cli/src/adapters/types.ts` (new), `apps/cli/src/adapters/hermes.ts` (new), `apps/cli/src/adapters/index.ts` (new), `apps/cli/src/adapter-registry.ts` (new), `apps/cli/src/commands/connect.ts` (modified)
+- **Learnings for future iterations:**
+  - The AgentAdapter interface uses `AsyncGenerator<string>` for streaming — Hermes currently yields the full response as one chunk since it's subprocess-based, but the interface supports true streaming for other adapters
+  - Adapter instances are stored in a `Map<string, AgentAdapter>` keyed by agent slug in the connect command scope
+  - `spawn()` with `stdio: ["ignore", "pipe", "pipe"]` is the pattern for capturing stdout/stderr without passing stdin
+  - Process timeout is handled via `spawn`'s `timeout` option (kills process after timeout) plus error event handling for ENOENT (binary not found)
+  - The adapter registry pattern (switch on agent.type) makes it easy to add new adapters in future stories (US-014 OpenClaw, US-023 Custom)
+---
+
+## 2026-03-18 - US-014
+- Implemented OpenClawAdapter in `apps/cli/src/adapters/openclaw.ts` with dual-mode operation:
+  - Primary: HTTP gateway at `/v1/chat/completions` with SSE streaming (OpenAI-compatible API)
+  - Fallback: subprocess `openclaw agent --message '<msg>' --json` when gateway is unavailable
+- Gateway detection via `/v1/models` health check with 3s timeout
+- SSE streaming: parses `data: ` lines, yields `delta.content` tokens as chunks, handles `[DONE]` sentinel
+- Subprocess fallback: parses JSON response (tries `response`, `content`, `text` fields), falls back to raw output
+- Updated `adapter-registry.ts` to instantiate OpenClawAdapter with config (binaryPath, configPath, gatewayUrl)
+- Updated `adapters/index.ts` to export OpenClawAdapter
+- Files changed: `apps/cli/src/adapters/openclaw.ts` (new), `apps/cli/src/adapters/index.ts` (modified), `apps/cli/src/adapter-registry.ts` (modified)
+- **Learnings for future iterations:**
+  - Node.js `fetch` supports streaming via `response.body.getReader()` — works for SSE parsing without external dependencies
+  - SSE format: lines starting with `data: ` contain JSON payloads; `data: [DONE]` signals end of stream
+  - OpenAI-compatible chat completions SSE uses `choices[0].delta.content` for streaming token content
+  - Gateway availability check should be fast (3s timeout) to avoid delaying fallback to subprocess
+  - The adapter follows the same `runProcess` pattern as HermesAdapter — could be extracted to a shared base class in future
+---
+
+## 2026-03-18 - US-015
+- Added agent list page UI at `/_auth/agents` route
+- Grid/list view showing agent cards with: name, slug, type badge (hermes/openclaw/custom), node name, online/offline status indicator
+- Search bar filtering on name, slug, description via oRPC `agents.list` query
+- Filter dropdowns for type and status
+- Separate sections for "Your Agents" and "Shared with you"
+- Empty state when no agents are connected with CLI connect instructions
+- Loading skeleton matching final layout shape
+- Files changed: `apps/web/src/routes/_auth/agents.tsx` (new), `apps/web/src/routeTree.gen.ts` (regenerated)
+- **Learnings for future iterations:**
+  - When using `Record<string, unknown>` for agent data in JSX, use `String(value)` instead of `value as string` to avoid TS2322 errors — `unknown` is not assignable to `ReactNode`
+  - Short-circuit `unknown && JSX` evaluates to `unknown` which fails — use ternary `unknown ? JSX : null` instead
+  - `@tanstack/router-cli generate` works for regenerating `routeTree.gen.ts` from the workspace root (no need for full vite build)
+  - Agent cards link to detail page (US-016) — using plain div for now since `/_auth/agents/$slug` route doesn't exist yet
+  - No Badge or Select components exist in `packages/ui/` — used native `<select>` for filters and inline styled spans for badges
+  - Referenced solved problem `ui/shadcn/dashboard-conventions` for skeleton loading patterns and layout conventions
 ---

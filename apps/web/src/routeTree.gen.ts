@@ -14,6 +14,7 @@ import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthSettingsRouteImport } from './routes/_auth/settings'
 import { Route as AuthDashboardRouteImport } from './routes/_auth/dashboard'
+import { Route as AuthAgentsRouteImport } from './routes/_auth/agents'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
 import { Route as AuthSettingsSecurityRouteImport } from './routes/_auth/settings/security'
 import { Route as AuthSettingsApiKeysRouteImport } from './routes/_auth/settings/api-keys'
@@ -43,6 +44,11 @@ const AuthDashboardRoute = AuthDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthAgentsRoute = AuthAgentsRouteImport.update({
+  id: '/agents',
+  path: '/agents',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthSettingsIndexRoute = AuthSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -67,6 +73,7 @@ const AuthSettingsAdminRoute = AuthSettingsAdminRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/agents': typeof AuthAgentsRoute
   '/dashboard': typeof AuthDashboardRoute
   '/settings': typeof AuthSettingsRouteWithChildren
   '/settings/admin': typeof AuthSettingsAdminRoute
@@ -77,6 +84,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/agents': typeof AuthAgentsRoute
   '/dashboard': typeof AuthDashboardRoute
   '/settings/admin': typeof AuthSettingsAdminRoute
   '/settings/api-keys': typeof AuthSettingsApiKeysRoute
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteWithChildren
   '/login': typeof LoginRoute
+  '/_auth/agents': typeof AuthAgentsRoute
   '/_auth/dashboard': typeof AuthDashboardRoute
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
   '/_auth/settings/admin': typeof AuthSettingsAdminRoute
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/agents'
     | '/dashboard'
     | '/settings'
     | '/settings/admin'
@@ -110,6 +120,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/agents'
     | '/dashboard'
     | '/settings/admin'
     | '/settings/api-keys'
@@ -120,6 +131,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_auth'
     | '/login'
+    | '/_auth/agents'
     | '/_auth/dashboard'
     | '/_auth/settings'
     | '/_auth/settings/admin'
@@ -169,6 +181,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthDashboardRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/agents': {
+      id: '/_auth/agents'
+      path: '/agents'
+      fullPath: '/agents'
+      preLoaderRoute: typeof AuthAgentsRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/settings/': {
@@ -221,11 +240,13 @@ const AuthSettingsRouteWithChildren = AuthSettingsRoute._addFileChildren(
 )
 
 interface AuthRouteChildren {
+  AuthAgentsRoute: typeof AuthAgentsRoute
   AuthDashboardRoute: typeof AuthDashboardRoute
   AuthSettingsRoute: typeof AuthSettingsRouteWithChildren
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthAgentsRoute: AuthAgentsRoute,
   AuthDashboardRoute: AuthDashboardRoute,
   AuthSettingsRoute: AuthSettingsRouteWithChildren,
 }

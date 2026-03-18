@@ -193,7 +193,7 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-011 for CLI package."
     },
     {
@@ -209,7 +209,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-011. The adapter interface should be defined in a shared location within apps/cli/."
     },
     {
@@ -225,7 +225,7 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-011."
     },
     {
@@ -242,7 +242,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "Uses agent.list oRPC route from US-008. Follow existing list page patterns. Check solved problems for dashboard conventions."
     },
     {
