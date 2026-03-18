@@ -658,7 +658,7 @@
         "Typecheck passes"
       ],
       "priority": 40,
-      "passes": false,
+      "passes": true,
       "notes": "Critical for safety when agents can message each other autonomously."
     }
   ]

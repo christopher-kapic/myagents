@@ -719,3 +719,22 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - Use `watchFile` with interval for simple log following (no chokidar dependency needed)
   - API key values should be masked in CLI output (show first 4 + last 4 chars)
 ---
+
+## 2026-03-18 - US-040
+- Implemented per-agent rate limiting with configurable messages/min (default 60) and circuit breaker threshold (default 10)
+- Added in-memory sliding-window rate limiter in ws.ts with `checkRateLimit()` for all message.send flows
+- Added A2A loop detection with `checkA2ALoop()` — trips circuit breaker when two agents exceed threshold mutual messages/min
+- Circuit breaker blocks further A2A messages until user resets via WebSocket `agent.circuitBreaker.reset` frame
+- Added `rateLimitPerMin` and `circuitBreakerThreshold` Int fields to Agent model (schema: `packages/db/prisma/schema/agents.prisma`)
+- Added oRPC routes: `agents.setRateLimit` (update config) and `agents.getRateLimit` (read config) in `packages/api/src/routers/agents.ts`
+- Added `agent.circuitBreaker.reset` to shared FrameMethod enum in `packages/shared/src/frames.ts`
+- Added Rate Limiting card to agent Settings tab UI with inputs for both configs and circuit breaker reset button
+- Push notification sent to user when circuit breaker trips
+- Rate limit error responses include `rateLimited: true`, `retryAfterMs`, `limit` fields for client handling
+- Files changed: `apps/server/src/ws.ts`, `apps/web/src/routes/_auth/agents/$slug/index.tsx`, `packages/api/src/routers/agents.ts`, `packages/db/prisma/schema/agents.prisma`, `packages/shared/src/frames.ts`
+- **Learnings for future iterations:**
+  - Rate limit state is in-memory (not persisted) — resets on server restart, which is acceptable for rate limiting
+  - Circuit breaker reset goes through WebSocket since the state lives in the ws.ts module, not the DB
+  - The `agentSelect` constant in the agents router must be updated whenever new fields are added to the Agent model that should be returned to clients
+  - The `FrameMethod` enum in shared/frames.ts must be updated when adding new WebSocket message types, otherwise TypeScript will reject them
+---
