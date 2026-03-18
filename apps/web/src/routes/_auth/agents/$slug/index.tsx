@@ -18,6 +18,7 @@ import {
 } from "@myagents/ui/components/dialog";
 import { Input } from "@myagents/ui/components/input";
 import { Skeleton } from "@myagents/ui/components/skeleton";
+import { Switch } from "@myagents/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
@@ -25,8 +26,10 @@ import {
   Bot,
   MessageSquare,
   Plus,
+  Search,
   Server,
   Settings,
+  Shield,
   Trash2,
   Wifi,
   WifiOff,
@@ -39,7 +42,7 @@ export const Route = createFileRoute("/_auth/agents/$slug/")({
   component: AgentDetailPage,
 });
 
-type Tab = "conversations" | "settings";
+type Tab = "conversations" | "permissions" | "settings";
 
 function AgentDetailPage() {
   const { slug } = Route.useParams();
@@ -173,6 +176,20 @@ function AgentDetailPage() {
         {isOwn && (
           <button
             type="button"
+            onClick={() => setActiveTab("permissions")}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === "permissions"
+                ? "border-foreground text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Shield className="h-4 w-4" />
+            Permissions
+          </button>
+        )}
+        {isOwn && (
+          <button
+            type="button"
             onClick={() => setActiveTab("settings")}
             className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               activeTab === "settings"
@@ -189,6 +206,8 @@ function AgentDetailPage() {
       {/* Tab Content */}
       {activeTab === "conversations" ? (
         <ConversationsTab agentId={String(agent.id)} slug={slug} />
+      ) : activeTab === "permissions" ? (
+        <PermissionsTab agent={agent} slug={slug} />
       ) : (
         <SettingsTab agent={agent} slug={slug} />
       )}
@@ -309,6 +328,389 @@ function ConversationsTab({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function PermissionsTab({
+  agent,
+  slug,
+}: {
+  agent: Record<string, unknown>;
+  slug: string;
+}) {
+  const queryClient = useQueryClient();
+  const agentId = String(agent.id);
+  const isShared = Boolean(agent.shared);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Fetch current permissions
+  const permissionsQuery = useQuery(
+    orpc.permissions.list.queryOptions({ input: { agentId } }),
+  );
+
+  // Fetch user's own agents to show as toggleable targets
+  const agentsQuery = useQuery(orpc.agents.list.queryOptions());
+
+  const shareMutation = useMutation({
+    mutationFn: () => orpc.agents.share.call({ id: agentId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
+      });
+    },
+  });
+
+  const unshareMutation = useMutation({
+    mutationFn: () => orpc.agents.unshare.call({ id: agentId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
+      });
+    },
+  });
+
+  const grantMutation = useMutation({
+    mutationFn: (targetAgentId: string) =>
+      orpc.permissions.grant.call({ agentId, targetAgentId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.permissions.list.queryOptions({ input: { agentId } })
+          .queryKey,
+      });
+    },
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: (targetAgentId: string) =>
+      orpc.permissions.revoke.call({ agentId, targetAgentId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.permissions.list.queryOptions({ input: { agentId } })
+          .queryKey,
+      });
+    },
+  });
+
+  const permissions = permissionsQuery.data as
+    | {
+        canSendTo: Array<{
+          id: string;
+          agent: {
+            id: string;
+            slug: string;
+            name: string;
+            type: string;
+            status: string;
+            userId: string;
+            username?: string | null;
+          };
+        }>;
+        canReceiveFrom: Array<{
+          id: string;
+          agent: {
+            id: string;
+            slug: string;
+            name: string;
+            type: string;
+            status: string;
+            userId: string;
+            username?: string | null;
+          };
+        }>;
+      }
+    | undefined;
+
+  const agentsData = agentsQuery.data as
+    | {
+        own: Array<Record<string, unknown>>;
+        shared?: Array<Record<string, unknown>>;
+      }
+    | undefined;
+
+  // Build list of all available target agents (own agents except this one + shared agents from others)
+  const ownAgents = (agentsData?.own ?? []).filter(
+    (a) => String(a.id) !== agentId,
+  );
+  const sharedAgents = (agentsData?.shared ?? []).map((a) => {
+    const displaySlug = a.user
+      ? `${String((a.user as Record<string, unknown>).username)}/${String(a.slug)}`
+      : String(a.slug);
+    return { agent: a, displaySlug };
+  });
+
+  const canSendToIds = new Set(
+    (permissions?.canSendTo ?? []).map((p) => p.agent.id),
+  );
+
+  // Filter agents by search query
+  const filterAgent = (a: Record<string, unknown>, displaySlug?: string) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      String(a.name).toLowerCase().includes(q) ||
+      String(a.slug).toLowerCase().includes(q) ||
+      (displaySlug ?? "").toLowerCase().includes(q)
+    );
+  };
+
+  const filteredOwnAgents = ownAgents.filter((a) => filterAgent(a));
+  const filteredSharedAgents = sharedAgents.filter((s) =>
+    filterAgent(s.agent, s.displaySlug),
+  );
+
+  const handleToggleSendTo = (targetId: string, currentlyGranted: boolean) => {
+    if (currentlyGranted) {
+      revokeMutation.mutate(targetId);
+    } else {
+      grantMutation.mutate(targetId);
+    }
+  };
+
+  const handleShareToggle = () => {
+    if (isShared) {
+      unshareMutation.mutate();
+    } else {
+      shareMutation.mutate();
+    }
+  };
+
+  const handleAllowAll = () => {
+    const allTargets = [
+      ...ownAgents.map((a) => String(a.id)),
+    ];
+    for (const targetId of allTargets) {
+      if (!canSendToIds.has(targetId)) {
+        grantMutation.mutate(targetId);
+      }
+    }
+  };
+
+  const handleDenyAll = () => {
+    for (const p of permissions?.canSendTo ?? []) {
+      revokeMutation.mutate(p.agent.id);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Share Toggle */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Share this agent</CardTitle>
+          <CardDescription>
+            When enabled, other users can discover this agent and grant their
+            agents permission to message it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={isShared}
+              onCheckedChange={handleShareToggle}
+              disabled={shareMutation.isPending || unshareMutation.isPending}
+            />
+            <span className="text-sm font-medium">
+              {isShared ? "Shared" : "Not shared"}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Can Send To */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Can send messages to</CardTitle>
+              <CardDescription>
+                Agents that this agent is allowed to message.
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleAllowAll}
+                disabled={grantMutation.isPending}
+              >
+                Allow all my agents
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDenyAll}
+                disabled={revokeMutation.isPending}
+              >
+                Deny all
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search agents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          {permissionsQuery.isLoading || agentsQuery.isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {filteredOwnAgents.length === 0 &&
+              filteredSharedAgents.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  {searchQuery
+                    ? "No agents match your search"
+                    : "No other agents available"}
+                </p>
+              ) : (
+                <>
+                  {filteredOwnAgents.map((a) => {
+                    const id = String(a.id);
+                    const granted = canSendToIds.has(id);
+                    return (
+                      <div
+                        key={id}
+                        className="flex items-center justify-between rounded-lg border px-4 py-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Bot className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {String(a.name)}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {String(a.slug)} &middot; {String(a.type)}
+                            </p>
+                          </div>
+                        </div>
+                        <Switch
+                          checked={granted}
+                          onCheckedChange={() =>
+                            handleToggleSendTo(id, granted)
+                          }
+                          disabled={
+                            grantMutation.isPending || revokeMutation.isPending
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                  {filteredSharedAgents.map((s) => {
+                    const id = String(s.agent.id);
+                    const granted = canSendToIds.has(id);
+                    return (
+                      <div
+                        key={id}
+                        className="flex items-center justify-between rounded-lg border px-4 py-3"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Bot className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {String(s.agent.name)}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {s.displaySlug} &middot; {String(s.agent.type)}
+                            </p>
+                          </div>
+                        </div>
+                        <Switch
+                          checked={granted}
+                          onCheckedChange={() =>
+                            handleToggleSendTo(id, granted)
+                          }
+                          disabled={
+                            grantMutation.isPending || revokeMutation.isPending
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Can Receive From */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Can receive messages from</CardTitle>
+          <CardDescription>
+            Agents that have been granted permission to message this agent.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {permissionsQuery.isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : (permissions?.canReceiveFrom ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No agents have permission to message this agent yet.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {(permissions?.canReceiveFrom ?? []).map((p) => {
+                const displaySlug =
+                  p.agent.username &&
+                  p.agent.userId !== String(agent.userId)
+                    ? `${p.agent.username}/${p.agent.slug}`
+                    : p.agent.slug;
+                return (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between rounded-lg border px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Bot className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {p.agent.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {displaySlug} &middot; {p.agent.type}
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-xs ${
+                        p.agent.status === "online"
+                          ? "text-green-600 dark:text-green-400"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-1.5 w-1.5 rounded-full ${
+                          p.agent.status === "online"
+                            ? "bg-green-500"
+                            : "bg-muted-foreground"
+                        }`}
+                      />
+                      {p.agent.status === "online" ? "Online" : "Offline"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
