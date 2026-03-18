@@ -1,0 +1,28 @@
+{
+  "name": "cli",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "myagents": "dist/index.mjs"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "check-types": "tsc -b",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.mjs"
+  },
+  "dependencies": {
+    "@myagents/shared": "workspace:*",
+    "commander": "^13.1.0",
+    "ws": "^8.18.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@myagents/config": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/ws": "^8.18.0",
+    "tsdown": "^0.16.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5"
+  }
+}

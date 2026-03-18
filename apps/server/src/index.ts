@@ -8,13 +8,33 @@ import { appRouter } from "@myagents/api/routers/index";
 import { auth } from "@myagents/auth";
 import { env } from "@myagents/env/server";
 import { serve } from "@hono/node-server";
+import { createNodeWebSocket } from "@hono/node-ws";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { authenticateWebSocket, createWSHandlers, startHeartbeat } from "./ws";
 
 const app = new Hono();
 
+const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({ app });
+
 app.use(logger());
+
+// WebSocket upgrade handler
+app.get(
+  "/ws",
+  upgradeWebSocket(async (c) => {
+    const authInfo = await authenticateWebSocket(c.req.raw);
+    if (!authInfo) {
+      return {
+        onOpen(_event, ws) {
+          ws.close(4001, "Unauthorized");
+        },
+      };
+    }
+    return createWSHandlers(authInfo);
+  }),
+);
 app.use(
   "/*",
   cors({
@@ -93,7 +113,7 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-serve(
+const server = serve(
   {
     fetch: app.fetch,
     port: 3000,
@@ -102,3 +122,8 @@ serve(
     console.log(`Server is running on http://localhost:${info.port}`);
   },
 );
+
+injectWebSocket(server);
+
+// Start WebSocket heartbeat system
+startHeartbeat();
