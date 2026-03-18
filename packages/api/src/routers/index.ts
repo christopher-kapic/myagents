@@ -2,6 +2,7 @@ import type { RouterClient } from "@orpc/server";
 import { env } from "@myagents/env/server";
 
 import { protectedProcedure, publicProcedure } from "../index";
+import { agentsRouter } from "./agents";
 import { apiKeysRouter } from "./apiKeys";
 import { pushRouter } from "./push";
 import { settingsRouter } from "./settings";
@@ -26,6 +27,7 @@ export const appRouter = {
   settings: settingsRouter,
   push: pushRouter,
   apiKeys: apiKeysRouter,
+  agents: agentsRouter,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;
