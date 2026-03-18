@@ -92,7 +92,7 @@ COPY --from=prod-deps /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=prod-deps /app/packages/db/node_modules ./packages/db/node_modules
 
 # Copy generated Prisma client from builder (since prod-deps skips postinstall)
-COPY --from=builder /app/packages/db/generated ./packages/db/generated
+COPY --from=builder /app/packages/db/prisma/generated ./packages/db/prisma/generated
 
 # Copy Prisma schema + config for runtime db push
 COPY --from=builder /app/packages/db/prisma ./packages/db/prisma
