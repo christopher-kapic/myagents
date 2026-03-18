@@ -22,6 +22,7 @@ import { Switch } from "@myagents/ui/components/switch";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
+  AlertTriangle,
   ArrowLeft,
   Bot,
   Download,
@@ -37,6 +38,7 @@ import {
   Trash2,
   Wifi,
   WifiOff,
+  Zap,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -47,6 +49,7 @@ import {
   DropdownMenuTrigger,
 } from "@myagents/ui/components/dropdown-menu";
 import { downloadFile, makeExportFilename } from "@/utils/export";
+import { useWebSocket } from "@/hooks/use-websocket";
 import { orpc } from "@/utils/orpc";
 
 export const Route = createFileRoute("/_auth/agents/$slug/")({
@@ -786,14 +789,31 @@ function SettingsTab({
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { sendFrame } = useWebSocket();
   const [name, setName] = useState(String(agent.name));
   const [description, setDescription] = useState(
     agent.description ? String(agent.description) : "",
+  );
+  const [rateLimitPerMin, setRateLimitPerMin] = useState(
+    Number(agent.rateLimitPerMin) || 60,
+  );
+  const [circuitBreakerThreshold, setCircuitBreakerThreshold] = useState(
+    Number(agent.circuitBreakerThreshold) || 10,
   );
 
   const updateMutation = useMutation({
     mutationFn: (data: { name?: string; description?: string | null }) =>
       orpc.agents.update.call({ id: String(agent.id), ...data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
+      });
+    },
+  });
+
+  const rateLimitMutation = useMutation({
+    mutationFn: (data: { rateLimitPerMin: number; circuitBreakerThreshold: number }) =>
+      orpc.agents.setRateLimit.call({ id: String(agent.id), ...data }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
@@ -811,6 +831,10 @@ function SettingsTab({
     },
   });
 
+  const handleResetCircuitBreaker = () => {
+    sendFrame("agent.circuitBreaker.reset", { agentId: String(agent.id) });
+  };
+
   const handleSave = () => {
     updateMutation.mutate({
       name: name !== String(agent.name) ? name : undefined,
@@ -821,9 +845,17 @@ function SettingsTab({
     });
   };
 
+  const handleSaveRateLimit = () => {
+    rateLimitMutation.mutate({ rateLimitPerMin, circuitBreakerThreshold });
+  };
+
   const hasChanges =
     name !== String(agent.name) ||
     description !== (agent.description ? String(agent.description) : "");
+
+  const hasRateLimitChanges =
+    rateLimitPerMin !== (Number(agent.rateLimitPerMin) || 60) ||
+    circuitBreakerThreshold !== (Number(agent.circuitBreakerThreshold) || 10);
 
   return (
     <div className="space-y-6">
@@ -925,6 +957,105 @@ function SettingsTab({
           </CardContent>
         </Card>
       ) : null}
+
+      {/* Rate Limiting */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-4 w-4" />
+            Rate Limiting
+          </CardTitle>
+          <CardDescription>
+            Configure message rate limits and circuit breaker thresholds to
+            prevent runaway loops and abuse.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="rate-limit" className="text-sm font-medium">
+              Messages per minute
+            </label>
+            <Input
+              id="rate-limit"
+              type="number"
+              min={1}
+              max={10000}
+              value={rateLimitPerMin}
+              onChange={(e) => setRateLimitPerMin(Number(e.target.value) || 1)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Maximum number of messages this agent can send or receive per
+              minute. Default: 60.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <label
+              htmlFor="circuit-breaker"
+              className="text-sm font-medium"
+            >
+              Circuit breaker threshold
+            </label>
+            <Input
+              id="circuit-breaker"
+              type="number"
+              min={1}
+              max={10000}
+              value={circuitBreakerThreshold}
+              onChange={(e) =>
+                setCircuitBreakerThreshold(Number(e.target.value) || 1)
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              If two agents exchange more than this many messages per minute,
+              communication is automatically paused. Default: 10.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleSaveRateLimit}
+              disabled={!hasRateLimitChanges || rateLimitMutation.isPending}
+            >
+              {rateLimitMutation.isPending
+                ? "Saving..."
+                : "Save Rate Limits"}
+            </Button>
+            {rateLimitMutation.isSuccess && (
+              <span className="text-sm text-green-600 dark:text-green-400">
+                Saved
+              </span>
+            )}
+            {rateLimitMutation.isError && (
+              <span className="text-sm text-red-600 dark:text-red-400">
+                Failed to save
+              </span>
+            )}
+          </div>
+
+          {/* Circuit Breaker Reset */}
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/30">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <h4 className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                  Circuit Breaker
+                </h4>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                  If agent-to-agent communication has been paused due to loop
+                  detection, click below to reset and resume.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2"
+                  onClick={handleResetCircuitBreaker}
+                >
+                  Reset Circuit Breaker
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Danger Zone */}
       <Card className="border-destructive/30">

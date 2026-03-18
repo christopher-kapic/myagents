@@ -38,8 +38,10 @@ model Agent {
   userId        String
   user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   status        AgentStatus @default(offline)
-  adapterConfig Json?
-  shared        Boolean     @default(false)
+  adapterConfig          Json?
+  shared                 Boolean     @default(false)
+  rateLimitPerMin        Int         @default(60)
+  circuitBreakerThreshold Int        @default(10)
   conversations        Conversation[]
   permissionsGranted   AgentPermission[] @relation("permissionsGranted")
   permissionsReceived  AgentPermission[] @relation("permissionsReceived")

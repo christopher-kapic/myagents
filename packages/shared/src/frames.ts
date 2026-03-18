@@ -15,6 +15,7 @@ export const FrameMethod = z.enum([
   "agent.heartbeat",
   "agent.status",
   "agent.list",
+  "agent.circuitBreaker.reset",
 ]);
 export type FrameMethod = z.infer<typeof FrameMethod>;
 

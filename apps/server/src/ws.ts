@@ -279,6 +279,10 @@ async function handleFrame(
       return handleAgentList(frame, connection);
     }
 
+    case "agent.circuitBreaker.reset": {
+      return handleCircuitBreakerReset(frame, connection);
+    }
+
     case "agent.status":
     case "auth":
       console.log(`[WS] received ${frame.method} from ${connection.type}`);
@@ -391,6 +395,60 @@ async function handleAgentRegister(
       "Failed to register agent",
     );
   }
+}
+
+// ─── Circuit Breaker Reset ────────────────────────────────────────────────────
+
+/**
+ * Handle agent.circuitBreaker.reset from a client connection.
+ * Resets the circuit breaker for the specified agent.
+ */
+async function handleCircuitBreakerReset(
+  frame: Frame,
+  connection: Connection,
+): Promise<Frame | null> {
+  if (connection.type !== "client") {
+    return createResponseFrame(
+      "agent.circuitBreaker.reset",
+      undefined,
+      frame.id,
+      "Only client connections can reset circuit breakers",
+    );
+  }
+
+  const payload = frame.payload as { agentId?: string };
+  if (!payload?.agentId) {
+    return createResponseFrame(
+      "agent.circuitBreaker.reset",
+      undefined,
+      frame.id,
+      "Missing agentId",
+    );
+  }
+
+  // Verify agent belongs to user
+  const agent = await prisma.agent.findUnique({
+    where: { id: payload.agentId },
+    select: { userId: true },
+  });
+
+  if (!agent || agent.userId !== connection.userId) {
+    return createResponseFrame(
+      "agent.circuitBreaker.reset",
+      undefined,
+      frame.id,
+      "Agent not found",
+    );
+  }
+
+  resetCircuitBreaker(payload.agentId);
+  console.log(`[WS] circuit breaker reset for agent ${payload.agentId} by user ${connection.userId}`);
+
+  return createResponseFrame(
+    "agent.circuitBreaker.reset",
+    { success: true },
+    frame.id,
+  );
 }
 
 // ─── Agent List (Permission-Gated Discovery) ─────────────────────────────────
@@ -625,6 +683,139 @@ async function handleAgentList(
   );
 }
 
+// ─── Rate Limiting & Circuit Breaker ──────────────────────────────────────────
+
+/**
+ * In-memory sliding-window rate limiter.
+ * Tracks message timestamps per agent within the current minute window.
+ */
+interface RateLimitBucket {
+  timestamps: number[];
+}
+
+/** Maps agentId → RateLimitBucket */
+const rateLimitBuckets = new Map<string, RateLimitBucket>();
+
+/**
+ * Tracks agent-to-agent message pairs for loop detection.
+ * Key: `${agentA}:${agentB}` (sorted IDs), Value: timestamps
+ */
+const a2aLoopBuckets = new Map<string, number[]>();
+
+/** Maps agentId → true when circuit breaker is tripped */
+const circuitBreakerTripped = new Map<string, boolean>();
+
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+
+/**
+ * Check if a message from/to an agent exceeds the rate limit.
+ * Returns { allowed: true } or { allowed: false, retryAfterMs, limit }.
+ */
+function checkRateLimit(
+  agentId: string,
+  rateLimitPerMin: number,
+): { allowed: true } | { allowed: false; retryAfterMs: number; limit: number } {
+  const now = Date.now();
+  let bucket = rateLimitBuckets.get(agentId);
+  if (!bucket) {
+    bucket = { timestamps: [] };
+    rateLimitBuckets.set(agentId, bucket);
+  }
+
+  // Evict timestamps outside the window
+  bucket.timestamps = bucket.timestamps.filter(
+    (t) => now - t < RATE_LIMIT_WINDOW_MS,
+  );
+
+  if (bucket.timestamps.length >= rateLimitPerMin) {
+    const oldest = bucket.timestamps[0]!;
+    const retryAfterMs = RATE_LIMIT_WINDOW_MS - (now - oldest);
+    return { allowed: false, retryAfterMs, limit: rateLimitPerMin };
+  }
+
+  bucket.timestamps.push(now);
+  return { allowed: true };
+}
+
+/**
+ * Check for A2A loop: if two agents message each other more than
+ * `threshold` times per minute, trip the circuit breaker.
+ * Returns true if the loop is detected and circuit breaker is tripped.
+ */
+function checkA2ALoop(
+  agentAId: string,
+  agentBId: string,
+  threshold: number,
+): boolean {
+  const now = Date.now();
+  // Sort IDs so A→B and B→A use the same bucket
+  const key =
+    agentAId < agentBId
+      ? `${agentAId}:${agentBId}`
+      : `${agentBId}:${agentAId}`;
+
+  let timestamps = a2aLoopBuckets.get(key);
+  if (!timestamps) {
+    timestamps = [];
+    a2aLoopBuckets.set(key, timestamps);
+  }
+
+  // Evict old timestamps
+  const filtered = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  filtered.push(now);
+  a2aLoopBuckets.set(key, filtered);
+
+  if (filtered.length > threshold) {
+    // Trip circuit breaker for both agents
+    circuitBreakerTripped.set(agentAId, true);
+    circuitBreakerTripped.set(agentBId, true);
+    console.warn(
+      `[WS] circuit breaker tripped: agents ${agentAId} and ${agentBId} exceeded ${threshold} mutual messages/min`,
+    );
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Check if an agent's circuit breaker is currently tripped.
+ */
+function isCircuitBreakerTripped(agentId: string): boolean {
+  return circuitBreakerTripped.get(agentId) === true;
+}
+
+/**
+ * Reset the circuit breaker for an agent (called via API when user acknowledges).
+ */
+export function resetCircuitBreaker(agentId: string): void {
+  circuitBreakerTripped.delete(agentId);
+  // Also clear any loop buckets involving this agent
+  for (const key of a2aLoopBuckets.keys()) {
+    if (key.includes(agentId)) {
+      a2aLoopBuckets.delete(key);
+    }
+  }
+}
+
+// Clean up stale rate-limit data every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, bucket] of rateLimitBuckets) {
+    bucket.timestamps = bucket.timestamps.filter(
+      (t) => now - t < RATE_LIMIT_WINDOW_MS,
+    );
+    if (bucket.timestamps.length === 0) rateLimitBuckets.delete(id);
+  }
+  for (const [key, timestamps] of a2aLoopBuckets) {
+    const filtered = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+    if (filtered.length === 0) {
+      a2aLoopBuckets.delete(key);
+    } else {
+      a2aLoopBuckets.set(key, filtered);
+    }
+  }
+}, 5 * 60_000);
+
 // ─── Message Routing ──────────────────────────────────────────────────────────
 
 /**
@@ -733,7 +924,7 @@ async function handleMessageSend(
   // Look up the target agent
   const agent = await prisma.agent.findFirst({
     where: { slug: agentSlug, userId },
-    select: { id: true, nodeId: true, status: true, slug: true },
+    select: { id: true, nodeId: true, status: true, slug: true, rateLimitPerMin: true },
   });
 
   if (!agent) {
@@ -753,6 +944,21 @@ async function handleMessageSend(
       undefined,
       frame.id,
       `Agent "${agentSlug}" is offline`,
+    );
+  }
+
+  // Rate limit check
+  const rateCheck = checkRateLimit(agent.id, agent.rateLimitPerMin);
+  if (!rateCheck.allowed) {
+    return createResponseFrame(
+      "message.send",
+      {
+        rateLimited: true,
+        retryAfterMs: rateCheck.retryAfterMs,
+        limit: rateCheck.limit,
+      },
+      frame.id,
+      `Rate limit exceeded for agent "${agentSlug}": max ${rateCheck.limit} messages/min. Retry after ${Math.ceil(rateCheck.retryAfterMs / 1000)}s.`,
     );
   }
 
@@ -835,7 +1041,7 @@ async function handleAgentToAgentSend(
   // Resolve sender agent (must belong to this node's user)
   const senderAgent = await prisma.agent.findUnique({
     where: { userId_slug: { userId, slug: senderSlug } },
-    select: { id: true, slug: true, nodeId: true, name: true },
+    select: { id: true, slug: true, nodeId: true, name: true, rateLimitPerMin: true, circuitBreakerThreshold: true },
   });
 
   if (!senderAgent) {
@@ -904,6 +1110,49 @@ async function handleAgentToAgentSend(
       undefined,
       frame.id,
       `Target agent "${targetAddress}" is not shared`,
+    );
+  }
+
+  // Circuit breaker check
+  if (isCircuitBreakerTripped(senderAgent.id)) {
+    return createResponseFrame(
+      "message.send",
+      { circuitBreakerTripped: true },
+      frame.id,
+      `Circuit breaker tripped for agent "${senderSlug}": agent-to-agent loop detected. Reset from the web UI to resume.`,
+    );
+  }
+
+  // Rate limit check (sender agent)
+  const senderRateCheck = checkRateLimit(senderAgent.id, senderAgent.rateLimitPerMin);
+  if (!senderRateCheck.allowed) {
+    return createResponseFrame(
+      "message.send",
+      {
+        rateLimited: true,
+        retryAfterMs: senderRateCheck.retryAfterMs,
+        limit: senderRateCheck.limit,
+      },
+      frame.id,
+      `Rate limit exceeded for agent "${senderSlug}": max ${senderRateCheck.limit} messages/min. Retry after ${Math.ceil(senderRateCheck.retryAfterMs / 1000)}s.`,
+    );
+  }
+
+  // Loop detection: check if these two agents are messaging too frequently
+  const loopDetected = checkA2ALoop(
+    senderAgent.id,
+    targetAgent.id,
+    senderAgent.circuitBreakerThreshold,
+  );
+  if (loopDetected) {
+    // Notify sender's user via push notification
+    void sendCircuitBreakerPush(userId, senderAgent.name, senderSlug, targetAgent.name);
+
+    return createResponseFrame(
+      "message.send",
+      { circuitBreakerTripped: true },
+      frame.id,
+      `Circuit breaker tripped: agents "${senderSlug}" and "${targetAddress}" are messaging too frequently (>${senderAgent.circuitBreakerThreshold}/min). Communication paused.`,
     );
   }
 
@@ -1380,6 +1629,51 @@ async function sendAgentOfflinePush(
     const payload = JSON.stringify({
       title: `${agentName} went offline`,
       body: `Agent ${agentSlug} has disconnected unexpectedly.`,
+      data: {
+        url: `/agents/${agentSlug}`,
+      },
+    });
+
+    await Promise.allSettled(
+      subscriptions.map(async (sub) => {
+        try {
+          await sendPushNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            payload,
+          );
+        } catch (err: unknown) {
+          const statusCode = (err as { statusCode?: number }).statusCode;
+          if (statusCode === 410 || statusCode === 404) {
+            await prisma.pushSubscription.delete({ where: { id: sub.id } });
+          }
+        }
+      }),
+    );
+  } catch {
+    // Push notifications are best-effort
+  }
+}
+
+/**
+ * Send a push notification when a circuit breaker trips due to an agent-to-agent loop.
+ */
+async function sendCircuitBreakerPush(
+  userId: string,
+  agentName: string,
+  agentSlug: string,
+  targetAgentName: string,
+): Promise<void> {
+  try {
+    const { sendPushNotification } = await import("@myagents/api/lib/web-push");
+
+    const subscriptions = await prisma.pushSubscription.findMany({
+      where: { userId },
+    });
+    if (subscriptions.length === 0) return;
+
+    const payload = JSON.stringify({
+      title: "Circuit Breaker Tripped",
+      body: `Agents "${agentName}" and "${targetAgentName}" are in a messaging loop. Communication paused.`,
       data: {
         url: `/agents/${agentSlug}`,
       },

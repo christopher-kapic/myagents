@@ -15,6 +15,8 @@ const agentSelect = {
   nodeId: true,
   userId: true,
   adapterConfig: true,
+  rateLimitPerMin: true,
+  circuitBreakerThreshold: true,
   node: { select: { id: true, name: true, status: true } },
 } as const;
 
@@ -420,5 +422,67 @@ export const agentsRouter = {
       });
 
       return serializeAgent(updated);
+    }),
+
+  setRateLimit: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        rateLimitPerMin: z.number().int().min(1).max(10000),
+        circuitBreakerThreshold: z.number().int().min(1).max(10000),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+      const admin = isAdmin(context);
+
+      const agent = await prisma.agent.findUnique({
+        where: { id: input.id },
+        select: { userId: true },
+      });
+
+      if (!agent || (!admin && agent.userId !== userId)) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Agent not found",
+        });
+      }
+
+      const updated = await prisma.agent.update({
+        where: { id: input.id },
+        data: {
+          rateLimitPerMin: input.rateLimitPerMin,
+          circuitBreakerThreshold: input.circuitBreakerThreshold,
+        },
+        select: agentSelect,
+      });
+
+      return serializeAgent(updated);
+    }),
+
+  getRateLimit: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+      const admin = isAdmin(context);
+
+      const agent = await prisma.agent.findUnique({
+        where: { id: input.id },
+        select: { userId: true, rateLimitPerMin: true, circuitBreakerThreshold: true },
+      });
+
+      if (!agent || (!admin && agent.userId !== userId)) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Agent not found",
+        });
+      }
+
+      return {
+        rateLimitPerMin: agent.rateLimitPerMin,
+        circuitBreakerThreshold: agent.circuitBreakerThreshold,
+      };
     }),
 };
