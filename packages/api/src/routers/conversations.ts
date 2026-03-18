@@ -37,6 +37,70 @@ function serializeConversation(conv: Record<string, unknown>) {
 }
 
 export const conversationsRouter = {
+  listAll: protectedProcedure
+    .input(
+      z
+        .object({
+          limit: z.number().min(1).max(100).optional(),
+          cursor: z.string().optional(),
+        })
+        .optional(),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+      const limit = input?.limit ?? 30;
+
+      const conversations = await prisma.conversation.findMany({
+        where: { userId },
+        select: {
+          ...conversationSelect,
+          messages: {
+            select: {
+              id: true,
+              content: true,
+              senderType: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+        take: limit + 1,
+        ...(input?.cursor
+          ? {
+              cursor: { id: input.cursor },
+              skip: 1,
+            }
+          : {}),
+      });
+
+      const hasMore = conversations.length > limit;
+      const items = hasMore ? conversations.slice(0, limit) : conversations;
+
+      return {
+        items: items.map((conv) => {
+          const lastMessage = conv.messages[0];
+          const { messages: _, ...rest } = conv;
+          return {
+            ...serializeConversation(rest),
+            lastMessage: lastMessage
+              ? {
+                  id: lastMessage.id,
+                  content:
+                    lastMessage.content.length > 100
+                      ? lastMessage.content.substring(0, 100) + "..."
+                      : lastMessage.content,
+                  senderType: String(lastMessage.senderType),
+                  createdAt: lastMessage.createdAt,
+                }
+              : null,
+          };
+        }),
+        nextCursor: hasMore ? items[items.length - 1]!.id : null,
+      };
+    }),
+
   list: protectedProcedure
     .input(
       z.object({

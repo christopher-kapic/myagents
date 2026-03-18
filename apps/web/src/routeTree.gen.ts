@@ -14,6 +14,7 @@ import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthSettingsRouteImport } from './routes/_auth/settings'
 import { Route as AuthDashboardRouteImport } from './routes/_auth/dashboard'
+import { Route as AuthConversationsRouteImport } from './routes/_auth/conversations'
 import { Route as AuthAgentsRouteImport } from './routes/_auth/agents'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
 import { Route as AuthAgentsIndexRouteImport } from './routes/_auth/agents/index'
@@ -47,6 +48,11 @@ const AuthSettingsRoute = AuthSettingsRouteImport.update({
 const AuthDashboardRoute = AuthDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthConversationsRoute = AuthConversationsRouteImport.update({
+  id: '/conversations',
+  path: '/conversations',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthAgentsRoute = AuthAgentsRouteImport.update({
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/agents': typeof AuthAgentsRouteWithChildren
+  '/conversations': typeof AuthConversationsRoute
   '/dashboard': typeof AuthDashboardRoute
   '/settings': typeof AuthSettingsRouteWithChildren
   '/agents/$slug': typeof AuthAgentsSlugRouteWithChildren
@@ -121,6 +128,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/conversations': typeof AuthConversationsRoute
   '/dashboard': typeof AuthDashboardRoute
   '/settings/admin': typeof AuthSettingsAdminRoute
   '/settings/api-keys': typeof AuthSettingsApiKeysRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteWithChildren
   '/login': typeof LoginRoute
   '/_auth/agents': typeof AuthAgentsRouteWithChildren
+  '/_auth/conversations': typeof AuthConversationsRoute
   '/_auth/dashboard': typeof AuthDashboardRoute
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
   '/_auth/agents/$slug': typeof AuthAgentsSlugRouteWithChildren
@@ -155,6 +164,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/agents'
+    | '/conversations'
     | '/dashboard'
     | '/settings'
     | '/agents/$slug'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
+    | '/conversations'
     | '/dashboard'
     | '/settings/admin'
     | '/settings/api-keys'
@@ -185,6 +196,7 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/login'
     | '/_auth/agents'
+    | '/_auth/conversations'
     | '/_auth/dashboard'
     | '/_auth/settings'
     | '/_auth/agents/$slug'
@@ -239,6 +251,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthDashboardRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/conversations': {
+      id: '/_auth/conversations'
+      path: '/conversations'
+      fullPath: '/conversations'
+      preLoaderRoute: typeof AuthConversationsRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/agents': {
@@ -377,12 +396,14 @@ const AuthSettingsRouteWithChildren = AuthSettingsRoute._addFileChildren(
 
 interface AuthRouteChildren {
   AuthAgentsRoute: typeof AuthAgentsRouteWithChildren
+  AuthConversationsRoute: typeof AuthConversationsRoute
   AuthDashboardRoute: typeof AuthDashboardRoute
   AuthSettingsRoute: typeof AuthSettingsRouteWithChildren
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
   AuthAgentsRoute: AuthAgentsRouteWithChildren,
+  AuthConversationsRoute: AuthConversationsRoute,
   AuthDashboardRoute: AuthDashboardRoute,
   AuthSettingsRoute: AuthSettingsRouteWithChildren,
 }

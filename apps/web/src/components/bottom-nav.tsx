@@ -1,8 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { LayoutDashboard, Settings } from "lucide-react";
+import { Bot, LayoutDashboard, MessageSquare, Settings } from "lucide-react";
 
 const navItems = [
   { to: "/dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
+  { to: "/agents" as const, label: "Agents", icon: Bot },
+  { to: "/conversations" as const, label: "Chats", icon: MessageSquare },
   { to: "/settings" as const, label: "Settings", icon: Settings },
 ];
 
