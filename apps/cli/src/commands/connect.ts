@@ -5,6 +5,7 @@ import { scanForAgents, type DetectedAgent } from "../scanner.js";
 import { createAdapter } from "../adapter-registry.js";
 import type { AgentAdapter } from "../adapters/types.js";
 import type { Frame } from "@myagents/shared";
+import { log, ensureLogsDir } from "../logger.js";
 
 /** Map of agent slug → adapter instance, populated after agent detection */
 const agentAdapters = new Map<string, AgentAdapter>();
@@ -26,6 +27,10 @@ export const connectCommand = new Command("connect")
 
     const serverUrl = opts.server ?? resolveServerUrl();
     const nodeId = opts.nodeId ?? resolveNodeId();
+
+    // Initialize logging
+    ensureLogsDir();
+    log("info", `CLI starting — server: ${serverUrl}, nodeId: ${nodeId}`);
 
     // Scan for agents before connecting
     console.log("Scanning for agents...");
@@ -55,6 +60,7 @@ export const connectCommand = new Command("connect")
       nodeId,
       onOpen() {
         console.log("Connected to server.");
+        log("info", "WebSocket connected to server");
 
         // Register detected agents with the server
         if (detectedAgents.length > 0) {
@@ -68,11 +74,13 @@ export const connectCommand = new Command("connect")
       },
       onClose(code: number, reason: string) {
         console.log(`Disconnected (code: ${code}, reason: ${reason})`);
+        log("warn", `WebSocket disconnected (code: ${code}, reason: ${reason})`);
       },
       onError(error: Error) {
         // Only log if not a connection refused (those are handled by reconnect)
         if (!error.message.includes("ECONNREFUSED")) {
           console.error(`WebSocket error: ${error.message}`);
+          log("error", `WebSocket error: ${error.message}`);
         }
       },
     });
@@ -96,6 +104,7 @@ export const connectCommand = new Command("connect")
 function registerAgents(client: WsClient, agents: DetectedAgent[]): void {
   for (const agent of agents) {
     console.log(`Registering agent: ${agent.name} (${agent.slug})`);
+    log("info", `Registering agent: ${agent.name} (${agent.slug}, type: ${agent.type})`);
     client.sendRequest("agent.register", {
       slug: agent.slug,
       name: agent.name,
@@ -115,6 +124,7 @@ function handleFrame(frame: Frame, client: WsClient): void {
       const conversationId = payload?.["conversationId"] as string | undefined;
 
       console.log(`Received message for agent "${agentSlug}": ${message?.slice(0, 80)}`);
+      log("info", `Message received for agent "${agentSlug}": ${message?.slice(0, 120)}`);
 
       if (!agentSlug || !message) {
         client.sendResponse("message.response", {
@@ -185,6 +195,7 @@ async function processMessage(
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error(`Error processing message for ${agentSlug}: ${errorMessage}`);
+    log("error", `Error processing message for ${agentSlug}: ${errorMessage}`);
 
     client.sendResponse("message.response", {
       conversationId,
