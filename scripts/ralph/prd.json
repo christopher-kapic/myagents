@@ -511,7 +511,7 @@
         "Typecheck passes"
       ],
       "priority": 31,
-      "passes": false,
+      "passes": true,
       "notes": "Privacy-first: all audio processing is client-side. Reference implementation is at ../whisper-web/ (sibling repo, on experimental-webgpu branch with GPU acceleration). Use kctx to query whisper-web for architecture patterns (worker setup, model loading, audio processing pipeline). Also read ../whisper-web/src/ directly for implementation details. Prefer WebGPU backend for faster inference (falls back to WASM if unavailable). Adapt to our React app structure — don't copy wholesale."
     },
     {

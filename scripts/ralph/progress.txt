@@ -40,6 +40,8 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
 - oRPC HTTP wire format: POST to `/rpc/<router>/<procedure>` with JSON body
 - Agent-to-agent routing: node sends `message.send` with `senderAgent` + `targetAgent` fields; `a2aConversations` map tracks pending A2A for response routing
 - Target agent addressing: bare `slug` (same user) or `username/slug` (cross-user) — resolved by `resolveTargetAgent()` in ws.ts
+- Whisper speech-to-text: `useWhisper()` hook in `apps/web/src/hooks/use-whisper.ts` — provides `transcribe(AudioBuffer)`, `transcribeBlob(Blob)`, model loading state, progress tracking; worker at `apps/web/src/workers/whisper.worker.js`
+- WebGPU detection in TypeScript: use `"gpu" in navigator` (not `navigator.gpu`) to avoid TS type errors
 ---
 
 ## 2026-03-18 - US-001
@@ -563,4 +565,23 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - CustomAdapter already set MYAGENTS_AGENT_SLUG — Hermes and OpenClaw needed the same treatment for consistency
   - The `senderAgent` and `targetAgent` fields in the message.send frame payload are already expected by the server's WebSocket handler (resolveTargetAgent in ws.ts)
   - Cross-user agent addressing uses `username/slug` format, same pattern used in both CLI and web UI
+---
+
+## 2026-03-18 - US-031
+- Integrated `@huggingface/transformers` for in-browser Whisper speech-to-text inference
+- Created `apps/web/src/workers/whisper.worker.js` — Web Worker for transcription using PipelineFactory singleton pattern, WhisperTextStreamer for real-time updates, WebGPU/WASM auto-detection
+- Created `apps/web/src/hooks/use-whisper.ts` — React hook managing model loading, audio processing (stereo-to-mono conversion), transcription state, progress tracking, and error handling
+- Supports WebGPU (preferred) with automatic WASM fallback; shows "not supported" if neither available
+- Default model: `whisper-base.en`; supports all whisper variants including `whisper-large-v3-turbo` on WebGPU
+- All audio processing is client-side — no audio leaves the device
+- Hook provides `transcribe(AudioBuffer)` and `transcribeBlob(Blob)` methods for flexible integration
+- Files changed: `apps/web/package.json`, `pnpm-lock.yaml`, `apps/web/src/workers/whisper.worker.js` (new), `apps/web/src/hooks/use-whisper.ts` (new)
+- **Learnings for future iterations:**
+  - `navigator.gpu` is not in TS types by default — use `"gpu" in navigator` check to avoid TS2339
+  - Whisper worker uses Vite's `new URL("../workers/whisper.worker.js", import.meta.url)` pattern for module workers
+  - Worker communicates via status messages: `initiate/progress/ready/done` for model loading, `update/complete/error` for transcription
+  - Stereo-to-mono conversion uses √2 scaling factor: `(√2 * (left + right)) / 2`
+  - Model quantization: encoder uses fp32 (or fp16 for large-v3-turbo), decoder uses q4
+  - The `.en` suffix on model names indicates English-only (non-multilingual) — affects whether language/subtask params are sent
+  - Referenced whisper-web reference implementation at `../whisper-web/` for architecture patterns
 ---
