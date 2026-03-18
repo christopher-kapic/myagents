@@ -33,6 +33,8 @@ export type WhisperModel =
 
 export type WhisperBackend = "webgpu" | "wasm" | "none";
 
+export type SpeechEngine = "whisper" | "web-speech";
+
 export interface UseWhisperOptions {
   model?: WhisperModel;
   language?: string;
@@ -73,6 +75,7 @@ const SAMPLING_RATE = 16000;
 const DEFAULT_MODEL: WhisperModel = "onnx-community/whisper-base.en";
 const STORAGE_KEY_MODEL = "whisper-model";
 const STORAGE_KEY_LANGUAGE = "whisper-language";
+const STORAGE_KEY_ENGINE = "speech-engine";
 
 /** Read persisted whisper model from localStorage */
 export function getStoredWhisperModel(): WhisperModel {
@@ -109,6 +112,28 @@ export function storeWhisperModel(model: WhisperModel): void {
 export function storeWhisperLanguage(language: string): void {
   try {
     localStorage.setItem(STORAGE_KEY_LANGUAGE, language);
+  } catch {
+    // localStorage unavailable
+  }
+}
+
+/** Read persisted speech engine from localStorage */
+export function getStoredSpeechEngine(): SpeechEngine {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_ENGINE);
+    if (stored === "whisper" || stored === "web-speech") {
+      return stored;
+    }
+  } catch {
+    // localStorage unavailable
+  }
+  return "whisper";
+}
+
+/** Persist speech engine to localStorage */
+export function storeSpeechEngine(engine: SpeechEngine): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_ENGINE, engine);
   } catch {
     // localStorage unavailable
   }

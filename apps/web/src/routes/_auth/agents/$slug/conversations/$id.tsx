@@ -448,6 +448,28 @@ function ConversationPage() {
             <span>{voice.error}</span>
           </div>
         )}
+        {voice.suggestWebSpeech && (
+          <div className="flex items-center gap-2 px-3 py-1.5 mb-2 text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-500/10 rounded-lg max-w-4xl mx-auto">
+            <span>Whisper is slow on this device.</span>
+            <button
+              type="button"
+              className="underline font-medium hover:no-underline"
+              onClick={() => {
+                voice.setEngine("web-speech");
+                voice.dismissSuggestion();
+              }}
+            >
+              Switch to Web Speech API
+            </button>
+            <button
+              type="button"
+              className="ml-auto text-yellow-600 dark:text-yellow-400 hover:text-yellow-800 dark:hover:text-yellow-200"
+              onClick={() => voice.dismissSuggestion()}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-2 max-w-4xl mx-auto">
           <textarea
             ref={textareaRef}
