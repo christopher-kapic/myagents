@@ -16,9 +16,11 @@ import { Route as AuthSettingsRouteImport } from './routes/_auth/settings'
 import { Route as AuthDashboardRouteImport } from './routes/_auth/dashboard'
 import { Route as AuthAgentsRouteImport } from './routes/_auth/agents'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
+import { Route as AuthAgentsIndexRouteImport } from './routes/_auth/agents/index'
 import { Route as AuthSettingsSecurityRouteImport } from './routes/_auth/settings/security'
 import { Route as AuthSettingsApiKeysRouteImport } from './routes/_auth/settings/api-keys'
 import { Route as AuthSettingsAdminRouteImport } from './routes/_auth/settings/admin'
+import { Route as AuthAgentsSlugRouteImport } from './routes/_auth/agents/$slug'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -54,6 +56,11 @@ const AuthSettingsIndexRoute = AuthSettingsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthSettingsRoute,
 } as any)
+const AuthAgentsIndexRoute = AuthAgentsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthAgentsRoute,
+} as any)
 const AuthSettingsSecurityRoute = AuthSettingsSecurityRouteImport.update({
   id: '/security',
   path: '/security',
@@ -69,26 +76,34 @@ const AuthSettingsAdminRoute = AuthSettingsAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthSettingsRoute,
 } as any)
+const AuthAgentsSlugRoute = AuthAgentsSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => AuthAgentsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/agents': typeof AuthAgentsRoute
+  '/agents': typeof AuthAgentsRouteWithChildren
   '/dashboard': typeof AuthDashboardRoute
   '/settings': typeof AuthSettingsRouteWithChildren
+  '/agents/$slug': typeof AuthAgentsSlugRoute
   '/settings/admin': typeof AuthSettingsAdminRoute
   '/settings/api-keys': typeof AuthSettingsApiKeysRoute
   '/settings/security': typeof AuthSettingsSecurityRoute
+  '/agents/': typeof AuthAgentsIndexRoute
   '/settings/': typeof AuthSettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/agents': typeof AuthAgentsRoute
   '/dashboard': typeof AuthDashboardRoute
+  '/agents/$slug': typeof AuthAgentsSlugRoute
   '/settings/admin': typeof AuthSettingsAdminRoute
   '/settings/api-keys': typeof AuthSettingsApiKeysRoute
   '/settings/security': typeof AuthSettingsSecurityRoute
+  '/agents': typeof AuthAgentsIndexRoute
   '/settings': typeof AuthSettingsIndexRoute
 }
 export interface FileRoutesById {
@@ -96,12 +111,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteWithChildren
   '/login': typeof LoginRoute
-  '/_auth/agents': typeof AuthAgentsRoute
+  '/_auth/agents': typeof AuthAgentsRouteWithChildren
   '/_auth/dashboard': typeof AuthDashboardRoute
   '/_auth/settings': typeof AuthSettingsRouteWithChildren
+  '/_auth/agents/$slug': typeof AuthAgentsSlugRoute
   '/_auth/settings/admin': typeof AuthSettingsAdminRoute
   '/_auth/settings/api-keys': typeof AuthSettingsApiKeysRoute
   '/_auth/settings/security': typeof AuthSettingsSecurityRoute
+  '/_auth/agents/': typeof AuthAgentsIndexRoute
   '/_auth/settings/': typeof AuthSettingsIndexRoute
 }
 export interface FileRouteTypes {
@@ -112,19 +129,22 @@ export interface FileRouteTypes {
     | '/agents'
     | '/dashboard'
     | '/settings'
+    | '/agents/$slug'
     | '/settings/admin'
     | '/settings/api-keys'
     | '/settings/security'
+    | '/agents/'
     | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
-    | '/agents'
     | '/dashboard'
+    | '/agents/$slug'
     | '/settings/admin'
     | '/settings/api-keys'
     | '/settings/security'
+    | '/agents'
     | '/settings'
   id:
     | '__root__'
@@ -134,9 +154,11 @@ export interface FileRouteTypes {
     | '/_auth/agents'
     | '/_auth/dashboard'
     | '/_auth/settings'
+    | '/_auth/agents/$slug'
     | '/_auth/settings/admin'
     | '/_auth/settings/api-keys'
     | '/_auth/settings/security'
+    | '/_auth/agents/'
     | '/_auth/settings/'
   fileRoutesById: FileRoutesById
 }
@@ -197,6 +219,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthSettingsIndexRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
+    '/_auth/agents/': {
+      id: '/_auth/agents/'
+      path: '/'
+      fullPath: '/agents/'
+      preLoaderRoute: typeof AuthAgentsIndexRouteImport
+      parentRoute: typeof AuthAgentsRoute
+    }
     '/_auth/settings/security': {
       id: '/_auth/settings/security'
       path: '/security'
@@ -218,8 +247,29 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthSettingsAdminRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
+    '/_auth/agents/$slug': {
+      id: '/_auth/agents/$slug'
+      path: '/$slug'
+      fullPath: '/agents/$slug'
+      preLoaderRoute: typeof AuthAgentsSlugRouteImport
+      parentRoute: typeof AuthAgentsRoute
+    }
   }
 }
+
+interface AuthAgentsRouteChildren {
+  AuthAgentsSlugRoute: typeof AuthAgentsSlugRoute
+  AuthAgentsIndexRoute: typeof AuthAgentsIndexRoute
+}
+
+const AuthAgentsRouteChildren: AuthAgentsRouteChildren = {
+  AuthAgentsSlugRoute: AuthAgentsSlugRoute,
+  AuthAgentsIndexRoute: AuthAgentsIndexRoute,
+}
+
+const AuthAgentsRouteWithChildren = AuthAgentsRoute._addFileChildren(
+  AuthAgentsRouteChildren,
+)
 
 interface AuthSettingsRouteChildren {
   AuthSettingsAdminRoute: typeof AuthSettingsAdminRoute
@@ -240,13 +290,13 @@ const AuthSettingsRouteWithChildren = AuthSettingsRoute._addFileChildren(
 )
 
 interface AuthRouteChildren {
-  AuthAgentsRoute: typeof AuthAgentsRoute
+  AuthAgentsRoute: typeof AuthAgentsRouteWithChildren
   AuthDashboardRoute: typeof AuthDashboardRoute
   AuthSettingsRoute: typeof AuthSettingsRouteWithChildren
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
-  AuthAgentsRoute: AuthAgentsRoute,
+  AuthAgentsRoute: AuthAgentsRouteWithChildren,
   AuthDashboardRoute: AuthDashboardRoute,
   AuthSettingsRoute: AuthSettingsRouteWithChildren,
 }
