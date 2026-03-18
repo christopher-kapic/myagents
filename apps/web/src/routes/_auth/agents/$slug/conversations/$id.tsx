@@ -2,7 +2,17 @@ import { Button } from "@myagents/ui/components/button";
 import { Skeleton } from "@myagents/ui/components/skeleton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, Bot, Loader2, PanelLeft, Send, User } from "lucide-react";
+import {
+  ArrowLeft,
+  Bot,
+  Loader2,
+  Mic,
+  MicOff,
+  PanelLeft,
+  Send,
+  Square,
+  User,
+} from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -10,6 +20,7 @@ import {
   useState,
 } from "react";
 
+import { useVoiceRecording } from "@/hooks/use-voice-recording";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useConversationSidebar } from "@/routes/_auth/agents/$slug/conversations";
 import { orpc } from "@/utils/orpc";
@@ -42,6 +53,21 @@ function ConversationPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [olderMessages, setOlderMessages] = useState<ChatMessage[]>([]);
+  const voice = useVoiceRecording();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Insert transcribed text into input
+  useEffect(() => {
+    if (voice.transcript) {
+      setInputValue((prev) => {
+        const separator = prev.trim() ? " " : "";
+        return prev + separator + voice.transcript;
+      });
+      voice.reset();
+      // Focus textarea so user can edit before sending
+      textareaRef.current?.focus();
+    }
+  }, [voice.transcript]);
 
   // Load conversation details
   const conversationQuery = useQuery(
@@ -394,12 +420,43 @@ function ConversationPage() {
 
       {/* Input */}
       <div className="border-t px-4 py-3 shrink-0">
+        {/* Voice recording status bar */}
+        {voice.isModelLoading && (
+          <div className="flex items-center gap-2 px-3 py-1.5 mb-2 text-xs text-muted-foreground bg-muted rounded-lg max-w-4xl mx-auto">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>Loading speech model...</span>
+            {voice.progressItems.length > 0 && (
+              <span className="ml-auto tabular-nums">
+                {Math.round(
+                  voice.progressItems.reduce((s, p) => s + p.progress, 0) /
+                    voice.progressItems.length,
+                )}
+                %
+              </span>
+            )}
+          </div>
+        )}
+        {voice.isProcessing && (
+          <div className="flex items-center gap-2 px-3 py-1.5 mb-2 text-xs text-muted-foreground bg-muted rounded-lg max-w-4xl mx-auto">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>Transcribing...</span>
+          </div>
+        )}
+        {voice.error && (
+          <div className="flex items-center gap-2 px-3 py-1.5 mb-2 text-xs text-destructive bg-destructive/10 rounded-lg max-w-4xl mx-auto">
+            <MicOff className="h-3 w-3" />
+            <span>{voice.error}</span>
+          </div>
+        )}
         <div className="flex items-end gap-2 max-w-4xl mx-auto">
           <textarea
+            ref={textareaRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            placeholder={
+              voice.isRecording ? "Listening..." : "Type a message..."
+            }
             rows={1}
             className="flex-1 resize-none rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring min-h-[40px] max-h-[120px]"
             style={{
@@ -412,6 +469,65 @@ function ConversationPage() {
               target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
             }}
           />
+          {/* Microphone button */}
+          {voice.isSupported && (
+            <Button
+              size="sm"
+              variant={voice.isRecording ? "destructive" : "outline"}
+              onClick={voice.toggleRecording}
+              disabled={voice.isProcessing || voice.isModelLoading}
+              className="h-10 w-10 p-0 shrink-0 relative"
+              onPointerDown={(e) => {
+                // Press-and-hold: start recording on pointer down
+                if (!voice.isRecording && !voice.isProcessing && !voice.isModelLoading) {
+                  (e.currentTarget as HTMLButtonElement).dataset.holdStart =
+                    String(Date.now());
+                }
+              }}
+              onPointerUp={(e) => {
+                // Press-and-hold: if held for >300ms, stop on release
+                const holdStart = Number(
+                  (e.currentTarget as HTMLButtonElement).dataset.holdStart || 0,
+                );
+                if (holdStart && Date.now() - holdStart > 300 && voice.isRecording) {
+                  voice.stopRecording();
+                  (e.currentTarget as HTMLButtonElement).dataset.holdStart = "";
+                }
+              }}
+              onPointerLeave={(e) => {
+                // If pointer leaves while holding, stop recording
+                const holdStart = Number(
+                  (e.currentTarget as HTMLButtonElement).dataset.holdStart || 0,
+                );
+                if (holdStart && voice.isRecording) {
+                  voice.stopRecording();
+                  (e.currentTarget as HTMLButtonElement).dataset.holdStart = "";
+                }
+              }}
+            >
+              {voice.isRecording ? (
+                <>
+                  {/* Pulsing ring animation while recording */}
+                  <span
+                    className="absolute inset-0 rounded-md animate-ping bg-destructive/20"
+                    style={{
+                      animationDuration: "1.5s",
+                    }}
+                  />
+                  {/* Audio level indicator ring */}
+                  <span
+                    className="absolute inset-0 rounded-md border-2 border-destructive/50 transition-transform"
+                    style={{
+                      transform: `scale(${1 + voice.audioLevel * 0.3})`,
+                    }}
+                  />
+                  <Square className="h-4 w-4 relative z-10" />
+                </>
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </Button>
+          )}
           <Button
             size="sm"
             onClick={handleSend}
