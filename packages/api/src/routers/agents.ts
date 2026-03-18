@@ -37,6 +37,10 @@ function serializeAgent(agent: Record<string, unknown>) {
   };
 }
 
+function isAdmin(context: { session: { user: { role?: string | null } } }): boolean {
+  return context.session.user.role === "admin";
+}
+
 export const agentsRouter = {
   list: protectedProcedure
     .input(
@@ -52,6 +56,7 @@ export const agentsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
       const filters = input ?? {};
 
       // Agent-perspective: return only agents the specified agent has permission to send to
@@ -111,6 +116,35 @@ export const agentsRouter = {
           own: [],
           shared: [],
           permitted: agents,
+        };
+      }
+
+      // Admin-perspective: see all agents across all users
+      if (admin) {
+        const where: Record<string, unknown> = {};
+        if (filters.type) where.type = filters.type;
+        if (filters.status) where.status = filters.status;
+        if (filters.nodeId) where.nodeId = filters.nodeId;
+        if (filters.search) {
+          where.OR = [
+            { name: { contains: filters.search, mode: "insensitive" } },
+            { slug: { contains: filters.search, mode: "insensitive" } },
+            { description: { contains: filters.search, mode: "insensitive" } },
+          ];
+        }
+
+        const allAgents = await prisma.agent.findMany({
+          where,
+          select: agentWithOwnerSelect,
+          orderBy: { name: "asc" },
+        });
+
+        const ownAgents = allAgents.filter((a) => a.userId === userId);
+        const otherAgents = allAgents.filter((a) => a.userId !== userId);
+
+        return {
+          own: ownAgents.map(serializeAgent),
+          shared: otherAgents.map(serializeAgent),
         };
       }
 
@@ -192,6 +226,7 @@ export const agentsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
 
       // Check if slug contains "/" for cross-user lookup (username/slug format)
       const slashIndex = input.slug.indexOf("/");
@@ -232,24 +267,32 @@ export const agentsRouter = {
         select: agentWithOwnerSelect,
       });
 
-      if (!agent || !agent.shared) {
+      if (!agent) {
         throw new ORPCError("NOT_FOUND", {
           message: "Agent not found",
         });
       }
 
-      // Check that the requesting user has permission to access this shared agent
-      const hasPermission = await prisma.agentPermission.findFirst({
-        where: {
-          targetAgentId: agent.id,
-          createdBy: userId,
-        },
-      });
+      // Admin can access any agent; non-admin requires shared + permission
+      if (!admin) {
+        if (!agent.shared) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Agent not found",
+          });
+        }
 
-      if (!hasPermission) {
-        throw new ORPCError("NOT_FOUND", {
-          message: "Agent not found",
+        const hasPermission = await prisma.agentPermission.findFirst({
+          where: {
+            targetAgentId: agent.id,
+            createdBy: userId,
+          },
         });
+
+        if (!hasPermission) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Agent not found",
+          });
+        }
       }
 
       return serializeAgent(agent);
@@ -265,13 +308,14 @@ export const agentsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
 
       const agent = await prisma.agent.findUnique({
         where: { id: input.id },
         select: { userId: true },
       });
 
-      if (!agent || agent.userId !== userId) {
+      if (!agent || (!admin && agent.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Agent not found",
         });
@@ -298,13 +342,14 @@ export const agentsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
 
       const agent = await prisma.agent.findUnique({
         where: { id: input.id },
         select: { userId: true },
       });
 
-      if (!agent || agent.userId !== userId) {
+      if (!agent || (!admin && agent.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Agent not found",
         });
@@ -325,13 +370,14 @@ export const agentsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
 
       const agent = await prisma.agent.findUnique({
         where: { id: input.id },
         select: { userId: true },
       });
 
-      if (!agent || agent.userId !== userId) {
+      if (!agent || (!admin && agent.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Agent not found",
         });
@@ -354,13 +400,14 @@ export const agentsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
 
       const agent = await prisma.agent.findUnique({
         where: { id: input.id },
         select: { userId: true },
       });
 
-      if (!agent || agent.userId !== userId) {
+      if (!agent || (!admin && agent.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Agent not found",
         });

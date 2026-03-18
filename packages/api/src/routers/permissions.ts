@@ -4,6 +4,10 @@ import { z } from "zod";
 
 import { protectedProcedure } from "../index";
 
+function isAdmin(context: { session: { user: { role?: string | null } } }): boolean {
+  return context.session.user.role === "admin";
+}
+
 export const permissionsRouter = {
   grant: protectedProcedure
     .input(
@@ -14,14 +18,15 @@ export const permissionsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
 
-      // Verify the source agent belongs to the authenticated user
+      // Verify the source agent belongs to the authenticated user (admin can grant for any agent)
       const sourceAgent = await prisma.agent.findUnique({
         where: { id: input.agentId },
         select: { userId: true },
       });
 
-      if (!sourceAgent || sourceAgent.userId !== userId) {
+      if (!sourceAgent || (!admin && sourceAgent.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Source agent not found",
         });
@@ -39,8 +44,8 @@ export const permissionsRouter = {
         });
       }
 
-      // Cross-user permission: target agent must be shared
-      if (targetAgent.userId !== userId && !targetAgent.shared) {
+      // Cross-user permission: target agent must be shared (admin can override)
+      if (!admin && targetAgent.userId !== userId && !targetAgent.shared) {
         throw new ORPCError("FORBIDDEN", {
           message: "Target agent is not shared and belongs to another user",
         });
@@ -86,14 +91,15 @@ export const permissionsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
 
-      // Verify the source agent belongs to the authenticated user
+      // Verify the source agent belongs to the authenticated user (admin can revoke for any agent)
       const sourceAgent = await prisma.agent.findUnique({
         where: { id: input.agentId },
         select: { userId: true },
       });
 
-      if (!sourceAgent || sourceAgent.userId !== userId) {
+      if (!sourceAgent || (!admin && sourceAgent.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Agent not found",
         });
@@ -134,14 +140,15 @@ export const permissionsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
 
-      // Verify the agent belongs to the authenticated user
+      // Verify the agent belongs to the authenticated user (admin can list any agent's permissions)
       const agent = await prisma.agent.findUnique({
         where: { id: input.agentId },
         select: { userId: true },
       });
 
-      if (!agent || agent.userId !== userId) {
+      if (!agent || (!admin && agent.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Agent not found",
         });

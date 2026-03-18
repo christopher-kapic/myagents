@@ -36,6 +36,10 @@ function serializeConversation(conv: Record<string, unknown>) {
   };
 }
 
+function isAdmin(context: { session: { user: { role?: string | null } } }): boolean {
+  return context.session.user.role === "admin";
+}
+
 export const conversationsRouter = {
   listAll: protectedProcedure
     .input(
@@ -48,10 +52,11 @@ export const conversationsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
       const limit = input?.limit ?? 30;
 
       const conversations = await prisma.conversation.findMany({
-        where: { userId },
+        where: admin ? {} : { userId },
         select: {
           ...conversationSelect,
           messages: {
@@ -109,21 +114,22 @@ export const conversationsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
 
-      // Verify the agent belongs to the user
+      // Verify the agent belongs to the user (admin can access any agent)
       const agent = await prisma.agent.findUnique({
         where: { id: input.agentId },
         select: { userId: true },
       });
 
-      if (!agent || agent.userId !== userId) {
+      if (!agent || (!admin && agent.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Agent not found",
         });
       }
 
       const conversations = await prisma.conversation.findMany({
-        where: { userId, agentId: input.agentId },
+        where: admin ? { agentId: input.agentId } : { userId, agentId: input.agentId },
         select: {
           ...conversationSelect,
           messages: {
@@ -186,7 +192,7 @@ export const conversationsRouter = {
         },
       });
 
-      if (!conversation || conversation.userId !== userId) {
+      if (!conversation || (!isAdmin(context) && conversation.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Conversation not found",
         });
@@ -211,14 +217,15 @@ export const conversationsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
 
-      // Verify the agent belongs to the user
+      // Verify the agent belongs to the user (admin can access any agent)
       const agent = await prisma.agent.findUnique({
         where: { id: input.agentId },
         select: { userId: true },
       });
 
-      if (!agent || agent.userId !== userId) {
+      if (!agent || (!admin && agent.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Agent not found",
         });
@@ -250,7 +257,7 @@ export const conversationsRouter = {
         select: { userId: true },
       });
 
-      if (!conversation || conversation.userId !== userId) {
+      if (!conversation || (!isAdmin(context) && conversation.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Conversation not found",
         });
@@ -280,7 +287,7 @@ export const conversationsRouter = {
 
       const messageWhere: Record<string, unknown> = {
         content: { contains: input.query, mode: "insensitive" },
-        conversation: { userId },
+        conversation: isAdmin(context) ? {} : { userId },
       };
 
       if (input.agentId) {
@@ -358,21 +365,22 @@ export const conversationsRouter = {
     )
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
+      const admin = isAdmin(context);
 
-      // Verify the agent belongs to the user
+      // Verify the agent belongs to the user (admin can access any agent)
       const agent = await prisma.agent.findUnique({
         where: { id: input.agentId },
         select: { userId: true, slug: true, name: true },
       });
 
-      if (!agent || agent.userId !== userId) {
+      if (!agent || (!admin && agent.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Agent not found",
         });
       }
 
       const conversations = await prisma.conversation.findMany({
-        where: { userId, agentId: input.agentId },
+        where: admin ? { agentId: input.agentId } : { userId, agentId: input.agentId },
         select: {
           id: true,
           title: true,
@@ -457,7 +465,7 @@ export const messagesRouter = {
         select: { userId: true },
       });
 
-      if (!conversation || conversation.userId !== userId) {
+      if (!conversation || (!isAdmin(context) && conversation.userId !== userId)) {
         throw new ORPCError("NOT_FOUND", {
           message: "Conversation not found",
         });

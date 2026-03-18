@@ -3,16 +3,21 @@ import { z } from "zod";
 
 import { protectedProcedure } from "../index";
 
+function isAdmin(context: { session: { user: { role?: string | null } } }): boolean {
+  return context.session.user.role === "admin";
+}
+
 export const healthRouter = {
   /**
-   * Get health overview for all user's agents.
+   * Get health overview for all user's agents (admin sees all agents).
    * Returns each agent with status, last seen, and uptime percentage.
    */
   overview: protectedProcedure.handler(async ({ context }) => {
     const userId = context.session.user.id;
+    const admin = isAdmin(context);
 
     const agents = await prisma.agent.findMany({
-      where: { userId },
+      where: admin ? {} : { userId },
       select: {
         id: true,
         slug: true,
@@ -85,8 +90,10 @@ export const healthRouter = {
     .handler(async ({ input, context }) => {
       const userId = context.session.user.id;
 
+      const admin = isAdmin(context);
+
       const agent = await prisma.agent.findFirst({
-        where: { id: input.agentId, userId },
+        where: admin ? { id: input.agentId } : { id: input.agentId, userId },
         select: {
           id: true,
           slug: true,
