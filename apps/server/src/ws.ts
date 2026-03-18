@@ -564,7 +564,11 @@ async function handleMessageDone(
   // Look up the conversation to find the user and agent
   const conversation = await prisma.conversation.findUnique({
     where: { id: payload.conversationId },
-    select: { userId: true, agentId: true },
+    select: {
+      userId: true,
+      agentId: true,
+      agent: { select: { slug: true, name: true } },
+    },
   });
   if (!conversation) return null;
 
@@ -600,6 +604,15 @@ async function handleMessageDone(
       client.ws.send(serialized);
     }
   }
+
+  // Send push notification (fire-and-forget)
+  void sendAgentResponsePush(
+    conversation.userId,
+    conversation.agent.name,
+    conversation.agent.slug,
+    payload.conversationId,
+    payload.content,
+  );
 
   return null;
 }
@@ -693,6 +706,57 @@ export function createWSHandlers(authInfo: {
       }
     },
   };
+}
+
+// ─── Push Notifications ───────────────────────────────────────────────────────
+
+/**
+ * Send a push notification to the user when an agent responds.
+ * Skipped silently if VAPID keys are not configured or user has no subscriptions.
+ */
+async function sendAgentResponsePush(
+  userId: string,
+  agentName: string,
+  agentSlug: string,
+  conversationId: string,
+  content: string,
+): Promise<void> {
+  try {
+    const { sendPushNotification } = await import("@myagents/api/lib/web-push");
+
+    const subscriptions = await prisma.pushSubscription.findMany({
+      where: { userId },
+    });
+    if (subscriptions.length === 0) return;
+
+    const preview = content.length > 120 ? content.slice(0, 120) + "…" : content;
+    const payload = JSON.stringify({
+      title: agentName,
+      body: preview,
+      data: {
+        url: `/agents/${agentSlug}/conversations/${conversationId}`,
+        conversationId,
+      },
+    });
+
+    await Promise.allSettled(
+      subscriptions.map(async (sub) => {
+        try {
+          await sendPushNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            payload,
+          );
+        } catch (err: unknown) {
+          const statusCode = (err as { statusCode?: number }).statusCode;
+          if (statusCode === 410 || statusCode === 404) {
+            await prisma.pushSubscription.delete({ where: { id: sub.id } });
+          }
+        }
+      }),
+    );
+  } catch {
+    // Push notifications are best-effort — don't break message flow
+  }
 }
 
 // ─── Heartbeat System ─────────────────────────────────────────────────────────
