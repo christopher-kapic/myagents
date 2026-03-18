@@ -6,6 +6,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@myagents/ui/components/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@myagents/ui/components/dialog";
 import { Input } from "@myagents/ui/components/input";
 import { Skeleton } from "@myagents/ui/components/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,7 +25,9 @@ import {
   Bot,
   MessageSquare,
   Plus,
+  Server,
   Settings,
+  Trash2,
   Wifi,
   WifiOff,
 } from "lucide-react";
@@ -121,7 +133,18 @@ function AgentDetailPage() {
             {node ? (
               <>
                 {" "}
-                &middot; Node: {String(node.name)}
+                &middot;{" "}
+                <span className="inline-flex items-center gap-1">
+                  <Server className="h-3 w-3" />
+                  {String(node.name)}
+                  <span
+                    className={`inline-block h-1.5 w-1.5 rounded-full ${
+                      node.status === "online"
+                        ? "bg-green-500"
+                        : "bg-muted-foreground"
+                    }`}
+                  />
+                </span>
               </>
             ) : null}
           </p>
@@ -298,6 +321,7 @@ function SettingsTab({
   slug: string;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [name, setName] = useState(String(agent.name));
   const [description, setDescription] = useState(
     agent.description ? String(agent.description) : "",
@@ -310,6 +334,16 @@ function SettingsTab({
       queryClient.invalidateQueries({
         queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
       });
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: () => orpc.agents.remove.call({ id: String(agent.id) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.agents.list.queryOptions().queryKey,
+      });
+      navigate({ to: "/agents" });
     },
   });
 
@@ -379,7 +413,144 @@ function SettingsTab({
           </div>
         </CardContent>
       </Card>
+
+      {/* Node Info */}
+      {agent.node ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Server className="h-4 w-4" />
+              Node Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Node</span>
+                <span className="font-medium">
+                  {String(
+                    (agent.node as Record<string, unknown>).name,
+                  )}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Status</span>
+                <span
+                  className={`inline-flex items-center gap-1.5 font-medium ${
+                    (agent.node as Record<string, unknown>).status ===
+                    "online"
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full ${
+                      (agent.node as Record<string, unknown>).status ===
+                      "online"
+                        ? "bg-green-500"
+                        : "bg-muted-foreground"
+                    }`}
+                  />
+                  {(agent.node as Record<string, unknown>).status ===
+                  "online"
+                    ? "Online"
+                    : "Offline"}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {/* Danger Zone */}
+      <Card className="border-destructive/30">
+        <CardHeader>
+          <CardTitle className="text-destructive">Danger Zone</CardTitle>
+          <CardDescription>
+            Removing an agent will unregister it from the server. Conversation
+            history will be permanently deleted.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <RemoveAgentDialog
+            agentSlug={slug}
+            onConfirm={() => removeMutation.mutate()}
+            isPending={removeMutation.isPending}
+          />
+        </CardContent>
+      </Card>
     </div>
+  );
+}
+
+function RemoveAgentDialog({
+  agentSlug,
+  onConfirm,
+  isPending,
+}: {
+  agentSlug: string;
+  onConfirm: () => void;
+  isPending: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+
+  const isConfirmed = confirmText === agentSlug;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setConfirmText("");
+      }}
+    >
+      <DialogTrigger
+        render={<Button variant="destructive" />}
+      >
+        <Trash2 className="h-4 w-4 mr-1" />
+        Remove Agent
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Remove Agent</DialogTitle>
+          <DialogDescription>
+            This action cannot be undone. This will permanently remove the agent
+            and all its conversations.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <p className="text-sm">
+            Type{" "}
+            <span className="font-mono font-medium text-foreground">
+              {agentSlug}
+            </span>{" "}
+            to confirm.
+          </p>
+          <Input
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder={agentSlug}
+            autoComplete="off"
+          />
+        </div>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>
+            Cancel
+          </DialogClose>
+          <Button
+            variant="destructive"
+            disabled={!isConfirmed || isPending}
+            onClick={() => {
+              onConfirm();
+              setOpen(false);
+            }}
+          >
+            {isPending ? "Removing..." : "Remove Agent"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
