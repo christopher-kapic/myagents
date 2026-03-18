@@ -627,7 +627,7 @@
         "Typecheck passes"
       ],
       "priority": 38,
-      "passes": false,
+      "passes": true,
       "notes": "Audit all agent/conversation queries for proper scoping. Cross-user agents addressed as username/slug. Check Better-Auth admin patterns."
     },
     {

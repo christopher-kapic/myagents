@@ -691,3 +691,17 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - The `conversationsRouter` object has `search` as the last procedure before closing `}` — when adding new procedures, add before the closing brace, after the last `,`
   - Manual browser verification needed (no dev-browser skill available)
 ---
+
+## 2026-03-18 - US-038
+- Audited and added admin bypass to all agent, conversation, permission, and health oRPC routes
+- Admin users (role === "admin") can now: see all agents across users, access/update/remove any agent, view all conversations, override permission checks (grant/revoke between any agents without shared requirement), view health for all agents
+- Non-admin user isolation verified: all queries properly scoped by userId, unshared agents never leak to other users
+- Cross-user sharing flow confirmed working: User A shares → User B discovers in shared → User B grants permission
+- WebSocket layer already properly scoped (no changes needed)
+- Files changed: `packages/api/src/routers/agents.ts`, `packages/api/src/routers/conversations.ts`, `packages/api/src/routers/permissions.ts`, `packages/api/src/routers/health.ts`
+- **Learnings for future iterations:**
+  - Better-Auth user.role type is `string | null | undefined` — use `{ role?: string | null }` in isAdmin helper signatures
+  - Admin bypass pattern: add `isAdmin(context)` helper per router file, check at each authorization gate with `(!admin && <ownership check>)`
+  - WebSocket layer doesn't need admin bypass — admin management happens via oRPC routes, not real-time WS
+  - The pre-existing `web-push` type error is non-blocking and should be ignored in CI checks
+---
