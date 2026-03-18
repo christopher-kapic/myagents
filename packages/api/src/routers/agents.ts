@@ -254,4 +254,62 @@ export const agentsRouter = {
 
       return { success: true };
     }),
+
+  share: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+
+      const agent = await prisma.agent.findUnique({
+        where: { id: input.id },
+        select: { userId: true },
+      });
+
+      if (!agent || agent.userId !== userId) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Agent not found",
+        });
+      }
+
+      const updated = await prisma.agent.update({
+        where: { id: input.id },
+        data: { shared: true },
+        select: agentSelect,
+      });
+
+      return serializeAgent(updated);
+    }),
+
+  unshare: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+
+      const agent = await prisma.agent.findUnique({
+        where: { id: input.id },
+        select: { userId: true },
+      });
+
+      if (!agent || agent.userId !== userId) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Agent not found",
+        });
+      }
+
+      const updated = await prisma.agent.update({
+        where: { id: input.id },
+        data: { shared: false },
+        select: agentSelect,
+      });
+
+      return serializeAgent(updated);
+    }),
 };

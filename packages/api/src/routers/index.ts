@@ -5,6 +5,7 @@ import { protectedProcedure, publicProcedure } from "../index";
 import { agentsRouter } from "./agents";
 import { apiKeysRouter } from "./apiKeys";
 import { conversationsRouter, messagesRouter } from "./conversations";
+import { permissionsRouter } from "./permissions";
 import { pushRouter } from "./push";
 import { settingsRouter } from "./settings";
 
@@ -31,6 +32,7 @@ export const appRouter = {
   agents: agentsRouter,
   conversations: conversationsRouter,
   messages: messagesRouter,
+  permissions: permissionsRouter,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;
