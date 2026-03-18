@@ -25,6 +25,7 @@ interface ChatMessage {
   senderType: string;
   createdAt: string | Date;
   pending?: boolean;
+  error?: boolean;
 }
 
 function ConversationPage() {
@@ -70,38 +71,10 @@ function ConversationPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [localMessages]);
 
-  // Listen for WebSocket events (message.done for agent responses)
+  // Listen for WebSocket events (streaming chunks, done, errors)
   useEffect(() => {
     const unsubscribe = subscribe((frame) => {
-      if (frame.method === "message.done") {
-        const payload = frame.payload as {
-          conversationId?: string;
-          messageId?: string;
-          content?: string;
-        };
-        if (payload?.conversationId === id && payload.content) {
-          setLocalMessages((prev) => [
-            ...prev,
-            {
-              id: payload.messageId ?? crypto.randomUUID(),
-              content: payload.content!,
-              senderType: "agent",
-              createdAt: new Date().toISOString(),
-            },
-          ]);
-          setSending(false);
-          // Invalidate conversation list to update last message preview
-          queryClient.invalidateQueries({
-            queryKey: orpc.conversations.list.queryOptions({
-              input: { agentId: "" },
-            }).queryKey[0]
-              ? undefined
-              : undefined,
-          });
-        }
-      }
-
-      // Handle streaming chunks (append to pending agent message)
+      // Handle streaming chunks — append to pending agent message
       if (frame.method === "message.chunk") {
         const payload = frame.payload as {
           conversationId?: string;
@@ -116,7 +89,7 @@ function ConversationPage() {
                 { ...last, content: last.content + payload.chunk },
               ];
             }
-            // Create new pending agent message
+            // Create new pending agent message for first chunk
             return [
               ...prev,
               {
@@ -128,6 +101,117 @@ function ConversationPage() {
               },
             ];
           });
+          // Scroll to bottom during streaming
+          requestAnimationFrame(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+          });
+        }
+      }
+
+      // Handle message.done — finalize the pending streaming message or add new
+      if (frame.method === "message.done") {
+        const payload = frame.payload as {
+          conversationId?: string;
+          messageId?: string;
+          content?: string;
+        };
+        if (payload?.conversationId === id && payload.content) {
+          setLocalMessages((prev) => {
+            const lastIdx = prev.length - 1;
+            const last = prev[lastIdx];
+            // If there's a pending streaming message, finalize it
+            if (last && last.senderType === "agent" && last.pending) {
+              return [
+                ...prev.slice(0, lastIdx),
+                {
+                  ...last,
+                  id: payload.messageId ?? last.id,
+                  content: payload.content!,
+                  pending: false,
+                },
+              ];
+            }
+            // No streaming message — add the complete response directly
+            return [
+              ...prev,
+              {
+                id: payload.messageId ?? crypto.randomUUID(),
+                content: payload.content!,
+                senderType: "agent",
+                createdAt: new Date().toISOString(),
+              },
+            ];
+          });
+          setSending(false);
+          // Invalidate conversation list to update last message preview
+          queryClient.invalidateQueries({
+            queryKey: orpc.conversations.list.queryOptions({
+              input: { agentId: "" },
+            }).queryKey[0]
+              ? undefined
+              : undefined,
+          });
+        }
+      }
+
+      // Handle error responses from message.send (agent offline, not found, etc.)
+      if (
+        frame.method === "message.send" &&
+        frame.type === "res" &&
+        frame.error
+      ) {
+        setLocalMessages((prev) => [
+          ...prev,
+          {
+            id: `error-${Date.now()}`,
+            content: frame.error ?? "Failed to send message",
+            senderType: "agent",
+            createdAt: new Date().toISOString(),
+            error: true,
+          },
+        ]);
+        setSending(false);
+      }
+
+      // Handle streaming error — if a response frame with error arrives mid-stream
+      if (
+        frame.method === "message.response" &&
+        frame.type === "res" &&
+        frame.error
+      ) {
+        const payload = frame.payload as { conversationId?: string };
+        if (!payload?.conversationId || payload.conversationId === id) {
+          setLocalMessages((prev) => {
+            const lastIdx = prev.length - 1;
+            const last = prev[lastIdx];
+            // If there's a pending streaming message, mark it as errored
+            if (last && last.senderType === "agent" && last.pending) {
+              return [
+                ...prev.slice(0, lastIdx),
+                {
+                  ...last,
+                  content:
+                    last.content +
+                    "\n\n[Error: " +
+                    (frame.error ?? "Stream interrupted") +
+                    "]",
+                  pending: false,
+                  error: true,
+                },
+              ];
+            }
+            return [
+              ...prev,
+              {
+                id: `error-${Date.now()}`,
+                content: frame.error ?? "Stream error",
+                senderType: "agent",
+                createdAt: new Date().toISOString(),
+                error: true,
+              },
+            ];
+          });
+          setSending(false);
         }
       }
     });
@@ -368,8 +452,18 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         <Bot className="h-4 w-4 text-muted-foreground" />
       </div>
       <div className="flex flex-col max-w-[80%]">
-        <div className="rounded-2xl rounded-tl-sm bg-muted px-4 py-2">
-          <p className="text-sm whitespace-pre-wrap break-words">
+        <div
+          className={`rounded-2xl rounded-tl-sm px-4 py-2 ${
+            message.error
+              ? "bg-destructive/10 border border-destructive/20"
+              : "bg-muted"
+          }`}
+        >
+          <p
+            className={`text-sm whitespace-pre-wrap break-words ${
+              message.error ? "text-destructive" : ""
+            }`}
+          >
             {message.content}
           </p>
         </div>
@@ -379,6 +473,9 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             <span className="ml-1 text-yellow-600 dark:text-yellow-400">
               streaming...
             </span>
+          )}
+          {message.error && (
+            <span className="ml-1 text-destructive">Error</span>
           )}
         </span>
       </div>
