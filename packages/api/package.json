@@ -1,0 +1,30 @@
+{
+  "name": "@myagents/api",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@orpc/client": "catalog:",
+    "@orpc/openapi": "catalog:",
+    "@orpc/server": "catalog:",
+    "@orpc/zod": "catalog:",
+    "@myagents/auth": "workspace:*",
+    "@myagents/db": "workspace:*",
+    "@myagents/env": "workspace:*",
+    "dotenv": "catalog:",
+    "web-push": "^3.6.7",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@myagents/config": "workspace:*",
+    "hono": "catalog:",
+    "typescript": "^5"
+  }
+}
