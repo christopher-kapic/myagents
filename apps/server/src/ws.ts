@@ -5,6 +5,7 @@ import { auth } from "@myagents/auth";
 import {
   parseFrame,
   serializeFrame,
+  createRequestFrame,
   createResponseFrame,
   createEventFrame,
   type Frame,
@@ -201,10 +202,10 @@ async function handleNodeDisconnect(nodeId: string): Promise<void> {
  * Handle an incoming frame from a connection.
  * Returns an optional response frame.
  */
-function handleFrame(
+async function handleFrame(
   frame: Frame,
   connection: Connection,
-): Frame | null {
+): Promise<Frame | null> {
   switch (frame.method) {
     case "agent.heartbeat": {
       if (connection.type === "node") {
@@ -218,17 +219,285 @@ function handleFrame(
       return null;
     }
 
+    case "message.send": {
+      return handleMessageSend(frame, connection);
+    }
+
+    case "message.response": {
+      return handleMessageResponse(frame, connection);
+    }
+
+    case "message.chunk": {
+      return handleMessageChunk(frame, connection);
+    }
+
+    case "message.done": {
+      return handleMessageDone(frame, connection);
+    }
+
     case "agent.register":
     case "agent.status":
-    case "message.send":
-    case "message.response":
-    case "message.chunk":
-    case "message.done":
     case "auth":
-      // These will be fully implemented in US-010 (message routing) and US-012 (agent registration)
+      // These will be fully implemented in US-012 (agent registration)
       console.log(`[WS] received ${frame.method} from ${connection.type}`);
       return null;
   }
+}
+
+// ─── Message Routing ──────────────────────────────────────────────────────────
+
+/**
+ * Handle message.send from a web client:
+ * 1. Look up the target agent and its node connection
+ * 2. Create/get conversation and save user message to DB
+ * 3. Forward to the agent's CLI node via WebSocket
+ */
+async function handleMessageSend(
+  frame: Frame,
+  connection: Connection,
+): Promise<Frame | null> {
+  const payload = frame.payload as {
+    agentSlug?: string;
+    conversationId?: string;
+    content?: string;
+  };
+
+  if (!payload?.agentSlug || !payload?.content) {
+    return createResponseFrame(
+      "message.send",
+      undefined,
+      frame.id,
+      "Missing agentSlug or content",
+    );
+  }
+
+  const { agentSlug, content } = payload;
+  const userId = connection.userId;
+
+  // Look up the target agent
+  const agent = await prisma.agent.findFirst({
+    where: { slug: agentSlug, userId },
+    select: { id: true, nodeId: true, status: true, slug: true },
+  });
+
+  if (!agent) {
+    return createResponseFrame(
+      "message.send",
+      undefined,
+      frame.id,
+      `Agent "${agentSlug}" not found`,
+    );
+  }
+
+  // Check if agent's node is connected
+  const nodeConn = connectionRegistry.getNodeConnection(agent.nodeId);
+  if (!nodeConn || nodeConn.ws.readyState !== 1) {
+    return createResponseFrame(
+      "message.send",
+      undefined,
+      frame.id,
+      `Agent "${agentSlug}" is offline`,
+    );
+  }
+
+  // Get or create conversation
+  let conversationId = payload.conversationId;
+  if (!conversationId) {
+    const conversation = await prisma.conversation.create({
+      data: {
+        userId,
+        agentId: agent.id,
+        title: content.slice(0, 50) + (content.length > 50 ? "..." : ""),
+      },
+      select: { id: true },
+    });
+    conversationId = conversation.id;
+  } else {
+    // Verify conversation exists and belongs to user
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversationId, userId },
+      select: { id: true },
+    });
+    if (!conversation) {
+      return createResponseFrame(
+        "message.send",
+        undefined,
+        frame.id,
+        "Conversation not found",
+      );
+    }
+  }
+
+  // Save user message to DB
+  const message = await prisma.message.create({
+    data: {
+      conversationId,
+      senderType: "user",
+      senderId: userId,
+      content,
+    },
+    select: { id: true },
+  });
+
+  // Forward to CLI node
+  const forwardFrame = createRequestFrame("message.send", {
+    conversationId,
+    agentSlug: agent.slug,
+    content,
+    messageId: message.id,
+  });
+  nodeConn.ws.send(serializeFrame(forwardFrame));
+
+  // Respond to sender with conversation and message IDs
+  return createResponseFrame(
+    "message.send",
+    { conversationId, messageId: message.id },
+    frame.id,
+  );
+}
+
+/**
+ * Handle message.response from CLI:
+ * Forward the full response to the user's WebSocket connection(s).
+ */
+async function handleMessageResponse(
+  frame: Frame,
+  connection: Connection,
+): Promise<Frame | null> {
+  if (connection.type !== "node") return null;
+
+  const payload = frame.payload as {
+    conversationId?: string;
+    content?: string;
+  };
+
+  if (!payload?.conversationId || !payload?.content) return null;
+
+  // Look up the conversation to find the user
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: payload.conversationId },
+    select: { userId: true },
+  });
+  if (!conversation) return null;
+
+  // Forward to user's client connections
+  const clientConns = connectionRegistry.getClientConnections(
+    conversation.userId,
+  );
+  const eventFrame = createEventFrame("message.response", {
+    conversationId: payload.conversationId,
+    content: payload.content,
+  });
+  const serialized = serializeFrame(eventFrame);
+  for (const client of clientConns) {
+    if (client.ws.readyState === 1) {
+      client.ws.send(serialized);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Handle message.chunk from CLI:
+ * Forward streaming chunks to the user's WebSocket connection(s).
+ */
+async function handleMessageChunk(
+  frame: Frame,
+  connection: Connection,
+): Promise<Frame | null> {
+  if (connection.type !== "node") return null;
+
+  const payload = frame.payload as {
+    conversationId?: string;
+    chunk?: string;
+  };
+
+  if (!payload?.conversationId || payload?.chunk === undefined) return null;
+
+  // Look up the conversation to find the user
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: payload.conversationId },
+    select: { userId: true },
+  });
+  if (!conversation) return null;
+
+  // Forward chunk to user's client connections
+  const clientConns = connectionRegistry.getClientConnections(
+    conversation.userId,
+  );
+  const eventFrame = createEventFrame("message.chunk", {
+    conversationId: payload.conversationId,
+    chunk: payload.chunk,
+  });
+  const serialized = serializeFrame(eventFrame);
+  for (const client of clientConns) {
+    if (client.ws.readyState === 1) {
+      client.ws.send(serialized);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Handle message.done from CLI:
+ * Save the complete agent message to DB and notify the user.
+ */
+async function handleMessageDone(
+  frame: Frame,
+  connection: Connection,
+): Promise<Frame | null> {
+  if (connection.type !== "node") return null;
+
+  const payload = frame.payload as {
+    conversationId?: string;
+    content?: string;
+  };
+
+  if (!payload?.conversationId || !payload?.content) return null;
+
+  // Look up the conversation to find the user and agent
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: payload.conversationId },
+    select: { userId: true, agentId: true },
+  });
+  if (!conversation) return null;
+
+  // Save agent message to DB
+  const message = await prisma.message.create({
+    data: {
+      conversationId: payload.conversationId,
+      senderType: "agent",
+      senderId: conversation.agentId,
+      content: payload.content,
+    },
+    select: { id: true },
+  });
+
+  // Update conversation updatedAt
+  await prisma.conversation.update({
+    where: { id: payload.conversationId },
+    data: { updatedAt: new Date() },
+  });
+
+  // Notify user's client connections
+  const clientConns = connectionRegistry.getClientConnections(
+    conversation.userId,
+  );
+  const eventFrame = createEventFrame("message.done", {
+    conversationId: payload.conversationId,
+    messageId: message.id,
+    content: payload.content,
+  });
+  const serialized = serializeFrame(eventFrame);
+  for (const client of clientConns) {
+    if (client.ws.readyState === 1) {
+      client.ws.send(serialized);
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -264,7 +533,7 @@ export function createWSHandlers(authInfo: {
       );
     },
 
-    onMessage(event: MessageEvent, _ws: WSContext) {
+    async onMessage(event: MessageEvent, _ws: WSContext) {
       if (!connection) return;
 
       const data = event.data;
@@ -279,9 +548,22 @@ export function createWSHandlers(authInfo: {
         connection.lastSeen = Date.now();
       }
 
-      const response = handleFrame(frame, connection);
-      if (response && connection.ws.readyState === 1) {
-        connection.ws.send(serializeFrame(response));
+      try {
+        const response = await handleFrame(frame, connection);
+        if (response && connection.ws.readyState === 1) {
+          connection.ws.send(serializeFrame(response));
+        }
+      } catch (err) {
+        console.error(`[WS] error handling frame ${frame.method}:`, err);
+        if (connection.ws.readyState === 1) {
+          const errorResponse = createResponseFrame(
+            frame.method,
+            undefined,
+            frame.id,
+            "Internal server error",
+          );
+          connection.ws.send(serializeFrame(errorResponse));
+        }
       }
     },
 
