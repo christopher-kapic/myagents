@@ -528,7 +528,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 32,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-031 for Whisper integration and US-017 for conversation view. Use kctx to query whisper-web for audio recording and MediaRecorder usage. Also read ../whisper-web/src/ for the recording implementation."
     },
     {

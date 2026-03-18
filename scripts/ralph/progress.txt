@@ -585,3 +585,19 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - The `.en` suffix on model names indicates English-only (non-multilingual) — affects whether language/subtask params are sent
   - Referenced whisper-web reference implementation at `../whisper-web/` for architecture patterns
 ---
+
+## 2026-03-18 - US-032
+- Added voice recording UI with microphone button in the conversation chat input
+- Created `useVoiceRecording` hook that wraps `useWhisper` with MediaRecorder for audio capture
+- Supports both press-and-hold (>300ms) and toggle recording modes
+- Visual feedback: pulsing animation + audio level ring during recording
+- Status bars for model loading progress, transcription in progress, and errors
+- Transcribed text inserted into input field for user to edit before sending
+- Files changed: `apps/web/src/hooks/use-voice-recording.ts` (new), `apps/web/src/routes/_auth/agents/$slug/conversations/$id.tsx` (modified)
+- **Learnings for future iterations:**
+  - MediaRecorder MIME type detection: use `MediaRecorder.isTypeSupported("audio/webm;codecs=opus")` with fallback to `audio/webm`
+  - Audio level visualization: use `AnalyserNode.getByteFrequencyData()` with `requestAnimationFrame` loop for smooth updates
+  - Press-and-hold vs toggle: use `pointerDown`/`pointerUp` events with timestamp tracking; >300ms hold triggers hold mode
+  - Whisper hook `output` updates trigger via `useEffect` — watch `mode === "processing"` to know when to capture transcript
+  - `navigator.mediaDevices.getUserMedia` may throw `NotAllowedError` — provide user-friendly message about browser permissions
+---
