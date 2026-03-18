@@ -21,6 +21,9 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
 - WebSocket route must be registered before CORS middleware to avoid upgrade issues
 - `packages/shared/` follows same pattern as `packages/db/` — exports via `./src/index.ts`, uses `@myagents/config/tsconfig.base.json`
 - Zod v4 `z.record()` requires two arguments: `z.record(z.string(), z.unknown())` (not single-arg like v3)
+- Prisma enum types in oRPC handler return values cause TS2742 errors — serialize enums to strings (e.g., `String(agent.type)`) to avoid type portability issues
+- Use `select` over `include` in Prisma queries within oRPC routes to control return shape and prevent type leakage
+- Compound unique constraints can be used for lookups: `prisma.agent.findUnique({ where: { userId_slug: { userId, slug } } })`
 ---
 
 ## 2026-03-18 - US-001
@@ -126,4 +129,78 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - WSContext `.readyState === 1` checks for OPEN state before sending
   - The `handleFrame` switch covers all FrameMethod variants — future stories (US-010, US-012) will add actual routing logic
   - Heartbeat uses `setInterval` — the returned handle can be used for cleanup in tests
+---
+
+## 2026-03-18 - US-008
+- Added agent oRPC routes: list, get, update, remove in `packages/api/src/routers/agents.ts`
+- Registered `agentsRouter` in `packages/api/src/routers/index.ts`
+- `agent.list` returns `{ own, shared }` — own agents for the user + shared agents from other users (via AgentPermission + shared=true)
+- `agent.get` accepts bare slug (own agent) or username/slug (cross-user shared agent) — rejects if not owned and not shared/permitted
+- `agent.update` allows updating name and description (ownership check)
+- `agent.remove` deletes agent by id (ownership check)
+- All routes use `protectedProcedure`, filters support search/type/status/nodeId
+- Files changed: `packages/api/src/routers/agents.ts` (new), `packages/api/src/routers/index.ts` (modified)
+- **Learnings for future iterations:**
+  - Prisma enum types in return values cause TS2742 "inferred type cannot be named" errors when the enum module isn't re-exported — fix by serializing enums to strings via a helper function (`String(agent.type)`)
+  - Use `select` instead of `include` in Prisma queries to control the return shape and avoid leaking internal types
+  - The `userId_slug` compound unique constraint can be used for lookups: `prisma.agent.findUnique({ where: { userId_slug: { userId, slug } } })`
+  - Cross-user agent access requires both `shared=true` on the target agent AND an AgentPermission record from the requesting user
+---
+
+## 2026-03-18 - US-009
+- Added conversation oRPC routes: list, get, create, delete in `packages/api/src/routers/conversations.ts`
+- Added message oRPC routes: list (cursor-based pagination) in same file
+- Registered `conversationsRouter` and `messagesRouter` in `packages/api/src/routers/index.ts`
+- `conversation.list` returns conversations for an agent sorted by recency, with last message preview (truncated to 100 chars)
+- `conversation.get` returns conversation with all messages ordered chronologically
+- `conversation.create` creates a new conversation for a user's agent
+- `conversation.delete` deletes a conversation (ownership check)
+- `message.list` uses cursor-based pagination (take N+1, check hasMore pattern) ordered by createdAt desc
+- All routes use `protectedProcedure` and verify ownership before operating
+- All enum values serialized to strings to avoid TS2742 errors
+- Files changed: `packages/api/src/routers/conversations.ts` (new), `packages/api/src/routers/index.ts` (modified)
+- **Learnings for future iterations:**
+  - Cursor-based pagination pattern: take `limit + 1`, if result has more than `limit` items, `hasMore = true` and `nextCursor = lastItem.id`; skip 1 when cursor is provided to exclude the cursor item itself
+  - For list routes with "last message preview", use nested `messages` select with `take: 1` and `orderBy: desc`, then destructure it out of the serialized result
+  - Multiple routers can be exported from a single file (e.g., `conversationsRouter` and `messagesRouter`) — they get separate keys in the appRouter
+---
+
+## 2026-03-18 - US-010
+- Implemented message routing through WebSocket in `apps/server/src/ws.ts`
+- `handleFrame` is now async to support DB operations during message routing
+- `message.send` (from web client): looks up target agent, checks node connection is online, creates/verifies conversation, saves user message to DB, forwards to CLI node via WebSocket, returns conversationId + messageId
+- `message.response` (from CLI): looks up conversation owner, forwards full response to user's client connections
+- `message.chunk` (from CLI): forwards streaming chunks to user's client connections for real-time display
+- `message.done` (from CLI): saves complete agent message to DB, updates conversation updatedAt, notifies user's client connections
+- Offline agent handling: returns error frame if target node is not connected or WebSocket not in OPEN state
+- Added try/catch in onMessage handler to send error response frames on unexpected errors
+- Files changed: `apps/server/src/ws.ts` (modified)
+- **Learnings for future iterations:**
+  - `handleFrame` needed to become async — the `onMessage` handler now awaits it with try/catch for error resilience
+  - `createRequestFrame` must be imported from `@myagents/shared` when forwarding requests to CLI nodes
+  - Pattern for forwarding to user: look up conversation → get userId → `connectionRegistry.getClientConnections(userId)` → broadcast to all client connections
+  - Pattern for forwarding to CLI: look up agent → get nodeId → `connectionRegistry.getNodeConnection(nodeId)` → send to single node connection
+  - Always check `ws.readyState === 1` (OPEN) before sending to avoid errors on closed connections
+---
+
+## 2026-03-18 - US-011
+- Created `apps/cli/` package with TypeScript, commander for CLI framework, and ws for WebSocket client
+- Added to pnpm workspace (auto-detected via `apps/*` glob in pnpm-workspace.yaml)
+- Implemented `myagents connect` command that:
+  - Reads API key from `MYAGENTS_API_KEY` env var or `~/.myagents/config.json`
+  - Opens WebSocket to server with `?type=node&apiKey=...&nodeId=...` auth
+  - Maintains persistent connection with reconnect on drop (exponential backoff: 1s → 30s max, with jitter)
+  - Sends heartbeats every 25s via `agent.heartbeat` frame
+  - Handles incoming `message.send` frames with placeholder response
+  - Graceful shutdown on SIGINT/SIGTERM
+- Config module (`config.ts`): loads/saves `~/.myagents/config.json`, auto-generates persistent nodeId
+- WebSocket client (`ws-client.ts`): reconnecting client with frame protocol integration
+- Files changed: `apps/cli/` (new package: package.json, tsconfig.json, src/index.ts, src/config.ts, src/ws-client.ts, src/commands/connect.ts)
+- **Learnings for future iterations:**
+  - CLI apps follow same monorepo pattern as server — `tsdown` for build, `tsx` for dev, `tsc -b` for typecheck
+  - Node WebSocket auth uses query params: `?type=node&apiKey=...&nodeId=...` — the server auto-creates node records
+  - The `ws` package uses event emitter pattern (`ws.on("open", ...)`) vs Hono's WSContext
+  - commander supports async action handlers — useful for connecting to server
+  - Node ID is auto-generated and persisted in `~/.myagents/config.json` for stable identity across restarts
+  - Used kctx `ws` dependency docs for WebSocket client patterns
 ---
