@@ -610,7 +610,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 37,
-      "passes": false,
+      "passes": true,
       "notes": "Client-side export for single conversations, server-side for bulk."
     },
     {

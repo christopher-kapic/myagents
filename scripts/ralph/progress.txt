@@ -674,3 +674,20 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - Push notification for offline agents follows the same pattern as `sendAgentResponsePush` — fire-and-forget with best-effort delivery
   - Manual browser verification needed (no dev-browser skill available)
 ---
+
+## 2026-03-18 - US-037
+- Implemented conversation export (Markdown and JSON formats)
+- Single conversation: client-side export via dropdown in conversation header (uses loaded messages)
+- Bulk export: server-side `conversations.exportBulk` oRPC route fetches all conversations + messages for an agent
+- Export All dropdown added to agent detail conversations tab
+- Files changed:
+  - `packages/api/src/routers/conversations.ts` — added `exportBulk` procedure
+  - `apps/web/src/utils/export.ts` — new file with format/download utilities
+  - `apps/web/src/routes/_auth/agents/$slug/conversations/$id.tsx` — added export dropdown to header
+  - `apps/web/src/routes/_auth/agents/$slug/index.tsx` — added bulk export dropdown in ConversationsTab
+- **Learnings for future iterations:**
+  - DropdownMenu uses Base UI `@base-ui/react/menu` — trigger uses `render` prop pattern like Dialog
+  - For client-side exports, data already in local state (localMessages) can be used directly without additional API calls
+  - The `conversationsRouter` object has `search` as the last procedure before closing `}` — when adding new procedures, add before the closing brace, after the last `,`
+  - Manual browser verification needed (no dev-browser skill available)
+---
