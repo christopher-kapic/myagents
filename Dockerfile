@@ -43,6 +43,9 @@ COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
 COPY --from=deps /app/packages/env/node_modules ./packages/env/node_modules
 COPY --from=deps /app/packages/ui/node_modules ./packages/ui/node_modules
 
+# Copy generated Prisma client from deps stage (created by postinstall)
+COPY --from=deps /app/packages/db/prisma/generated ./packages/db/prisma/generated
+
 COPY . .
 
 RUN pnpm turbo build --filter=web --filter=server
