@@ -9,11 +9,13 @@ export class OpenClawAdapter implements AgentAdapter {
   private config: OpenClawAdapterConfig;
   private binaryPath: string;
   private gatewayUrl: string;
+  private agentSlug: string;
 
-  constructor(config: OpenClawAdapterConfig = {}) {
+  constructor(config: OpenClawAdapterConfig = {}, agentSlug: string) {
     this.config = config;
     this.binaryPath = config.binaryPath ?? "openclaw";
     this.gatewayUrl = config.gatewayUrl ?? DEFAULT_GATEWAY_URL;
+    this.agentSlug = agentSlug;
   }
 
   async *sendMessage(
@@ -171,6 +173,10 @@ export class OpenClawAdapter implements AgentAdapter {
       const proc = spawn(this.binaryPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
         timeout: DEFAULT_TIMEOUT,
+        env: {
+          ...process.env,
+          MYAGENTS_AGENT_SLUG: this.agentSlug,
+        },
       });
 
       let stdout = "";

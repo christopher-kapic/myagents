@@ -7,10 +7,12 @@ const DEFAULT_TIMEOUT = 120_000; // 2 minutes
 export class HermesAdapter implements AgentAdapter {
   private config: HermesAdapterConfig;
   private binaryPath: string;
+  private agentSlug: string;
 
-  constructor(config: HermesAdapterConfig = {}) {
+  constructor(config: HermesAdapterConfig = {}, agentSlug: string) {
     this.config = config;
     this.binaryPath = config.binaryPath ?? "hermes";
+    this.agentSlug = agentSlug;
   }
 
   async *sendMessage(
@@ -51,6 +53,10 @@ export class HermesAdapter implements AgentAdapter {
       const proc = spawn(this.binaryPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
         timeout: DEFAULT_TIMEOUT,
+        env: {
+          ...process.env,
+          MYAGENTS_AGENT_SLUG: this.agentSlug,
+        },
       });
 
       let stdout = "";

@@ -90,15 +90,16 @@ agentCommand
 
 agentCommand
   .command("send <slug> <message>")
-  .description("Send a message to an agent and print the response")
+  .description("Send a message to an agent and print the response (slug can be username/slug for cross-user agents)")
   .option("--server <url>", "Server URL (overrides env/config)")
   .option("--api-key <key>", "API key (overrides env/config)")
   .option("--timeout <ms>", "Response timeout in milliseconds", "120000")
+  .option("--as <slug>", "Identify as this agent (for agent-to-agent messaging)")
   .action(
     async (
       slug: string,
       message: string,
-      opts: { server?: string; apiKey?: string; timeout?: string },
+      opts: { server?: string; apiKey?: string; timeout?: string; as?: string },
     ) => {
       const apiKey = opts.apiKey ?? resolveApiKey();
       if (!apiKey) {
@@ -112,6 +113,9 @@ agentCommand
       const serverUrl = opts.server ?? resolveServerUrl();
       const timeout = parseInt(opts.timeout ?? "120000", 10);
 
+      // Resolve sender agent identity: --as flag takes priority, then MYAGENTS_AGENT_SLUG env var
+      const senderAgent = opts.as ?? process.env.MYAGENTS_AGENT_SLUG;
+
       try {
         const response = await sendMessageViaWebSocket(
           serverUrl,
@@ -119,6 +123,7 @@ agentCommand
           slug,
           message,
           timeout,
+          senderAgent,
         );
         console.log(response);
       } catch (err) {
@@ -310,6 +315,7 @@ function sendMessageViaWebSocket(
   agentSlug: string,
   message: string,
   timeoutMs: number,
+  senderAgent?: string,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const wsUrl = serverUrl.replace(/^http/, "ws");
@@ -336,11 +342,23 @@ function sendMessageViaWebSocket(
     }, timeoutMs);
 
     ws.on("open", () => {
-      // Send the message
-      const frame = createRequestFrame("message.send", {
+      // Build payload — include sender/target agent identity for agent-to-agent messaging
+      const payload: Record<string, string> = {
         agentSlug,
         content: message,
-      });
+      };
+
+      // For cross-user agents (username/slug format), set targetAgent explicitly
+      if (agentSlug.includes("/")) {
+        payload.targetAgent = agentSlug;
+      }
+
+      // Include sender agent identity if provided (--as flag or MYAGENTS_AGENT_SLUG env var)
+      if (senderAgent) {
+        payload.senderAgent = senderAgent;
+      }
+
+      const frame = createRequestFrame("message.send", payload);
       ws.send(serializeFrame(frame));
     });
 
