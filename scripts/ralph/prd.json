@@ -477,7 +477,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 29,
-      "passes": false,
+      "passes": true,
       "notes": "Extends US-016 agent detail page with new tab. Cross-user agents shown as username/slug."
     },
     {

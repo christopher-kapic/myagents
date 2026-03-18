@@ -531,3 +531,22 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - A2A tracking is cleaned up on `message.done` — reuse the conversationId for subsequent messages in the same conversation
   - `resolveTargetAgent()` pattern: split on "/", if 2 parts → cross-user lookup via username, else → same-user lookup via userId_slug compound key
 ---
+
+## 2026-03-18 - US-029
+- Added Permissions tab to agent detail page (`apps/web/src/routes/_auth/agents/$slug/index.tsx`)
+- Created Switch UI component (`packages/ui/src/components/switch.tsx`) using Base UI Switch primitive
+- Permissions tab includes:
+  - "Share this agent" toggle at top to enable/disable cross-user discovery
+  - "Can send messages to" section with toggle switches for each available agent (own + shared by others)
+  - Search/filter to find agents by name, slug, or display slug
+  - "Allow all my agents" / "Deny all" bulk action buttons
+  - "Can receive messages from" section showing agents that have permission to message this agent (read-only with status indicators)
+  - Cross-user agents displayed as `username/slug`
+- Files changed: `apps/web/src/routes/_auth/agents/$slug/index.tsx` (modified), `packages/ui/src/components/switch.tsx` (new)
+- **Learnings for future iterations:**
+  - Base UI Switch is at `@base-ui/react/switch` — uses `checked`/`onCheckedChange` props and `data-checked` attribute for styling
+  - Switch thumb positioning: use `[[data-checked]>&]:translate-x-4` selector pattern (parent's data-checked affects child)
+  - When mapping over shared agents from the agents.list response, keep the original `Record<string, unknown>` reference separate from computed display fields to avoid TypeScript losing the spread type
+  - The permissions.list route returns `canSendTo` and `canReceiveFrom` arrays — each contains the full agent info with userId and username for display
+  - Deleted stale `.js` build artifact (`$slug/index.js`) that could conflict with `.tsx` source
+---
