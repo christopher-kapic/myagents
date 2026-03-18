@@ -545,7 +545,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 33,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-031. Use kctx to query whisper-web for model loading progress callbacks and caching strategy. Also read ../whisper-web/src/ for how it handles model downloads and caching."
     },
     {

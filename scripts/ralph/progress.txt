@@ -601,3 +601,21 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - Whisper hook `output` updates trigger via `useEffect` — watch `mode === "processing"` to know when to capture transcript
   - `navigator.mediaDevices.getUserMedia` may throw `NotAllowedError` — provide user-friendly message about browser permissions
 ---
+
+## 2026-03-18 - US-033
+- Added voice settings page at `/_auth/settings/voice` with model selection, language selection, download progress, cache management, and "not supported" message
+- Added localStorage persistence for whisper model and language choices via `getStoredWhisperModel()`, `storeWhisperModel()`, `getStoredWhisperLanguage()`, `storeWhisperLanguage()` in `use-whisper.ts`
+- Exported `WHISPER_MODELS` (7 models with metadata: label, size, description, requiresWebGPU, englishOnly) and `WHISPER_LANGUAGES` (90+ languages) from `use-whisper.ts`
+- Model selection shows cached status per model, disables WebGPU-only models when not available
+- Cache management uses Cache API to inspect `transformers`/`huggingface` cache entries, show total size, and allow clearing
+- Language selector disabled for English-only models with explanation
+- Download progress shown with per-file progress bars during model loading
+- Added "Voice" nav item with Mic icon to settings layout sidebar
+- Files changed: `apps/web/src/hooks/use-whisper.ts` (modified), `apps/web/src/routes/_auth/settings/voice.tsx` (new), `apps/web/src/routes/_auth/settings.tsx` (modified), `apps/web/src/routeTree.gen.ts` (modified)
+- **Learnings for future iterations:**
+  - `@huggingface/transformers` caches models via Cache API — cache names contain "transformers" or "huggingface"
+  - To detect cached model size: iterate cache entries, `response.clone().blob()` to get size
+  - Whisper model settings persistence: store in localStorage, read in `useWhisper` hook default values
+  - English-only models end with `.en` — use `model.endsWith(".en")` to detect
+  - Route tree manual updates: add import, route config, type entries (FileRoutesByFullPath, FileRoutesByTo, FileRoutesById, fullPaths, to, id unions), FileRoutesByPath declaration, and children interface/const
+---
