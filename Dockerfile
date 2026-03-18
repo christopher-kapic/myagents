@@ -70,7 +70,7 @@ COPY packages/ui/package.json packages/ui/
 COPY packages/db/prisma.config.ts packages/db/
 COPY packages/db/prisma packages/db/prisma
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # --- Runner stage ---
 FROM base AS runner
@@ -88,6 +88,9 @@ COPY packages/db/package.json packages/db/
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=prod-deps /app/apps/server/node_modules ./apps/server/node_modules
 COPY --from=prod-deps /app/packages/db/node_modules ./packages/db/node_modules
+
+# Copy generated Prisma client from builder (since prod-deps skips postinstall)
+COPY --from=builder /app/packages/db/generated ./packages/db/generated
 
 # Copy Prisma schema + config for runtime db push
 COPY --from=builder /app/packages/db/prisma ./packages/db/prisma
