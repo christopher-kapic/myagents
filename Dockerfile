@@ -45,7 +45,7 @@ COPY --from=deps /app/packages/ui/node_modules ./packages/ui/node_modules
 
 COPY . .
 
-RUN pnpm build
+RUN pnpm turbo build --filter=web --filter=server
 
 # Verify build outputs exist
 RUN test -f apps/server/dist/index.mjs && test -d apps/web/dist
