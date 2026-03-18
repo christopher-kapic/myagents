@@ -2,7 +2,7 @@ import { Button } from "@myagents/ui/components/button";
 import { Skeleton } from "@myagents/ui/components/skeleton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, Bot, Loader2, Send, User } from "lucide-react";
+import { ArrowLeft, Bot, Loader2, PanelLeft, Send, User } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { useWebSocket } from "@/hooks/use-websocket";
+import { useConversationSidebar } from "@/routes/_auth/agents/$slug/conversations";
 import { orpc } from "@/utils/orpc";
 
 export const Route = createFileRoute(
@@ -32,6 +33,7 @@ function ConversationPage() {
   const { slug, id } = Route.useParams();
   const queryClient = useQueryClient();
   const { connected, sendFrame, subscribe } = useWebSocket();
+  const { openDrawer } = useConversationSidebar();
   const [inputValue, setInputValue] = useState("");
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
@@ -279,22 +281,19 @@ function ConversationPage() {
 
   if (conversationQuery.isError || !conversationQuery.data) {
     return (
-      <div className="container mx-auto max-w-4xl px-4 py-8">
+      <div className="flex flex-col items-center justify-center flex-1 px-4 py-8 text-center">
+        <Bot className="h-12 w-12 text-muted-foreground mb-4" />
+        <h3 className="text-lg font-medium mb-1">Conversation not found</h3>
+        <p className="text-sm text-muted-foreground">
+          This conversation doesn't exist or you don't have access.
+        </p>
         <Link
           to="/agents/$slug"
           params={{ slug }}
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
+          className="mt-4 text-sm text-muted-foreground hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" />
-          Back to agent
+          &larr; Back to agent
         </Link>
-        <div className="flex flex-col items-center justify-center py-12 text-center">
-          <Bot className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-1">Conversation not found</h3>
-          <p className="text-sm text-muted-foreground">
-            This conversation doesn't exist or you don't have access.
-          </p>
-        </div>
       </div>
     );
   }
@@ -305,13 +304,22 @@ function ConversationPage() {
     : "Untitled conversation";
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 border-b px-4 py-3 shrink-0">
+        {/* Mobile: drawer toggle */}
+        <button
+          type="button"
+          onClick={openDrawer}
+          className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent md:hidden"
+        >
+          <PanelLeft className="h-4 w-4" />
+        </button>
+        {/* Desktop: back to agent */}
         <Link
           to="/agents/$slug"
           params={{ slug }}
-          className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent"
+          className="hidden md:inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent"
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
@@ -485,12 +493,13 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 
 function ConversationSkeleton({ slug }: { slug: string }) {
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 border-b px-4 py-3">
+        <div className="h-8 w-8 md:hidden" />
         <Link
           to="/agents/$slug"
           params={{ slug }}
-          className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent"
+          className="hidden md:inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent"
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>

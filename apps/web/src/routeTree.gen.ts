@@ -22,6 +22,7 @@ import { Route as AuthSettingsApiKeysRouteImport } from './routes/_auth/settings
 import { Route as AuthSettingsAdminRouteImport } from './routes/_auth/settings/admin'
 import { Route as AuthAgentsSlugRouteImport } from './routes/_auth/agents/$slug'
 import { Route as AuthAgentsSlugIndexRouteImport } from './routes/_auth/agents/$slug/index'
+import { Route as AuthAgentsSlugConversationsRouteImport } from './routes/_auth/agents/$slug/conversations'
 import { Route as AuthAgentsSlugConversationsIdRouteImport } from './routes/_auth/agents/$slug/conversations/$id'
 
 const LoginRoute = LoginRouteImport.update({
@@ -88,11 +89,17 @@ const AuthAgentsSlugIndexRoute = AuthAgentsSlugIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthAgentsSlugRoute,
 } as any)
+const AuthAgentsSlugConversationsRoute =
+  AuthAgentsSlugConversationsRouteImport.update({
+    id: '/conversations',
+    path: '/conversations',
+    getParentRoute: () => AuthAgentsSlugRoute,
+  } as any)
 const AuthAgentsSlugConversationsIdRoute =
   AuthAgentsSlugConversationsIdRouteImport.update({
-    id: '/conversations/$id',
-    path: '/conversations/$id',
-    getParentRoute: () => AuthAgentsSlugRoute,
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthAgentsSlugConversationsRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -107,6 +114,7 @@ export interface FileRoutesByFullPath {
   '/settings/security': typeof AuthSettingsSecurityRoute
   '/agents/': typeof AuthAgentsIndexRoute
   '/settings/': typeof AuthSettingsIndexRoute
+  '/agents/$slug/conversations': typeof AuthAgentsSlugConversationsRouteWithChildren
   '/agents/$slug/': typeof AuthAgentsSlugIndexRoute
   '/agents/$slug/conversations/$id': typeof AuthAgentsSlugConversationsIdRoute
 }
@@ -119,6 +127,7 @@ export interface FileRoutesByTo {
   '/settings/security': typeof AuthSettingsSecurityRoute
   '/agents': typeof AuthAgentsIndexRoute
   '/settings': typeof AuthSettingsIndexRoute
+  '/agents/$slug/conversations': typeof AuthAgentsSlugConversationsRouteWithChildren
   '/agents/$slug': typeof AuthAgentsSlugIndexRoute
   '/agents/$slug/conversations/$id': typeof AuthAgentsSlugConversationsIdRoute
 }
@@ -136,6 +145,7 @@ export interface FileRoutesById {
   '/_auth/settings/security': typeof AuthSettingsSecurityRoute
   '/_auth/agents/': typeof AuthAgentsIndexRoute
   '/_auth/settings/': typeof AuthSettingsIndexRoute
+  '/_auth/agents/$slug/conversations': typeof AuthAgentsSlugConversationsRouteWithChildren
   '/_auth/agents/$slug/': typeof AuthAgentsSlugIndexRoute
   '/_auth/agents/$slug/conversations/$id': typeof AuthAgentsSlugConversationsIdRoute
 }
@@ -153,6 +163,7 @@ export interface FileRouteTypes {
     | '/settings/security'
     | '/agents/'
     | '/settings/'
+    | '/agents/$slug/conversations'
     | '/agents/$slug/'
     | '/agents/$slug/conversations/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/settings/security'
     | '/agents'
     | '/settings'
+    | '/agents/$slug/conversations'
     | '/agents/$slug'
     | '/agents/$slug/conversations/$id'
   id:
@@ -181,6 +193,7 @@ export interface FileRouteTypes {
     | '/_auth/settings/security'
     | '/_auth/agents/'
     | '/_auth/settings/'
+    | '/_auth/agents/$slug/conversations'
     | '/_auth/agents/$slug/'
     | '/_auth/agents/$slug/conversations/$id'
   fileRoutesById: FileRoutesById
@@ -284,24 +297,46 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAgentsSlugIndexRouteImport
       parentRoute: typeof AuthAgentsSlugRoute
     }
+    '/_auth/agents/$slug/conversations': {
+      id: '/_auth/agents/$slug/conversations'
+      path: '/conversations'
+      fullPath: '/agents/$slug/conversations'
+      preLoaderRoute: typeof AuthAgentsSlugConversationsRouteImport
+      parentRoute: typeof AuthAgentsSlugRoute
+    }
     '/_auth/agents/$slug/conversations/$id': {
       id: '/_auth/agents/$slug/conversations/$id'
-      path: '/conversations/$id'
+      path: '/$id'
       fullPath: '/agents/$slug/conversations/$id'
       preLoaderRoute: typeof AuthAgentsSlugConversationsIdRouteImport
-      parentRoute: typeof AuthAgentsSlugRoute
+      parentRoute: typeof AuthAgentsSlugConversationsRoute
     }
   }
 }
 
-interface AuthAgentsSlugRouteChildren {
-  AuthAgentsSlugIndexRoute: typeof AuthAgentsSlugIndexRoute
+interface AuthAgentsSlugConversationsRouteChildren {
   AuthAgentsSlugConversationsIdRoute: typeof AuthAgentsSlugConversationsIdRoute
 }
 
+const AuthAgentsSlugConversationsRouteChildren: AuthAgentsSlugConversationsRouteChildren =
+  {
+    AuthAgentsSlugConversationsIdRoute: AuthAgentsSlugConversationsIdRoute,
+  }
+
+const AuthAgentsSlugConversationsRouteWithChildren =
+  AuthAgentsSlugConversationsRoute._addFileChildren(
+    AuthAgentsSlugConversationsRouteChildren,
+  )
+
+interface AuthAgentsSlugRouteChildren {
+  AuthAgentsSlugConversationsRoute: typeof AuthAgentsSlugConversationsRouteWithChildren
+  AuthAgentsSlugIndexRoute: typeof AuthAgentsSlugIndexRoute
+}
+
 const AuthAgentsSlugRouteChildren: AuthAgentsSlugRouteChildren = {
+  AuthAgentsSlugConversationsRoute:
+    AuthAgentsSlugConversationsRouteWithChildren,
   AuthAgentsSlugIndexRoute: AuthAgentsSlugIndexRoute,
-  AuthAgentsSlugConversationsIdRoute: AuthAgentsSlugConversationsIdRoute,
 }
 
 const AuthAgentsSlugRouteWithChildren = AuthAgentsSlugRoute._addFileChildren(
