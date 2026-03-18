@@ -194,7 +194,8 @@ export async function authenticateWebSocket(
 }
 
 /**
- * Handle node disconnection: mark node and its agents as offline.
+ * Handle node disconnection: mark node and its agents as offline,
+ * log uptime transitions, and send push notifications.
  */
 async function handleNodeDisconnect(nodeId: string): Promise<void> {
   try {
@@ -202,10 +203,32 @@ async function handleNodeDisconnect(nodeId: string): Promise<void> {
       where: { id: nodeId },
       data: { status: "offline", lastSeen: new Date() },
     });
+
+    // Find agents on this node that are currently online (going offline)
+    const affectedAgents = await prisma.agent.findMany({
+      where: { nodeId, status: "online" },
+      select: { id: true, slug: true, name: true, userId: true },
+    });
+
     await prisma.agent.updateMany({
       where: { nodeId },
       data: { status: "offline" },
     });
+
+    // Log uptime transitions and send push notifications for each affected agent
+    if (affectedAgents.length > 0) {
+      await prisma.agentUptimeLog.createMany({
+        data: affectedAgents.map((agent) => ({
+          agentId: agent.id,
+          status: "offline" as const,
+        })),
+      });
+
+      // Send push notifications (fire-and-forget)
+      for (const agent of affectedAgents) {
+        void sendAgentOfflinePush(agent.userId, agent.name, agent.slug);
+      }
+    }
   } catch {
     // Node may have been deleted
   }
@@ -348,6 +371,11 @@ async function handleAgentRegister(
     });
 
     console.log(`[WS] agent registered: ${agent.slug} (${agent.id}) on node ${connection.nodeId}`);
+
+    // Log the online transition for uptime tracking
+    void prisma.agentUptimeLog.create({
+      data: { agentId: agent.id, status: "online" },
+    });
 
     return createResponseFrame(
       "agent.register",
@@ -1330,6 +1358,50 @@ async function sendAgentResponsePush(
     );
   } catch {
     // Push notifications are best-effort — don't break message flow
+  }
+}
+
+/**
+ * Send a push notification to the user when an agent goes offline unexpectedly.
+ */
+async function sendAgentOfflinePush(
+  userId: string,
+  agentName: string,
+  agentSlug: string,
+): Promise<void> {
+  try {
+    const { sendPushNotification } = await import("@myagents/api/lib/web-push");
+
+    const subscriptions = await prisma.pushSubscription.findMany({
+      where: { userId },
+    });
+    if (subscriptions.length === 0) return;
+
+    const payload = JSON.stringify({
+      title: `${agentName} went offline`,
+      body: `Agent ${agentSlug} has disconnected unexpectedly.`,
+      data: {
+        url: `/agents/${agentSlug}`,
+      },
+    });
+
+    await Promise.allSettled(
+      subscriptions.map(async (sub) => {
+        try {
+          await sendPushNotification(
+            { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+            payload,
+          );
+        } catch (err: unknown) {
+          const statusCode = (err as { statusCode?: number }).statusCode;
+          if (statusCode === 410 || statusCode === 404) {
+            await prisma.pushSubscription.delete({ where: { id: sub.id } });
+          }
+        }
+      }),
+    );
+  } catch {
+    // Push notifications are best-effort
   }
 }
 

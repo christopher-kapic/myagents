@@ -43,10 +43,23 @@ model Agent {
   conversations        Conversation[]
   permissionsGranted   AgentPermission[] @relation("permissionsGranted")
   permissionsReceived  AgentPermission[] @relation("permissionsReceived")
+  uptimeLogs           AgentUptimeLog[]
 
   @@unique([userId, slug])
   @@index([nodeId])
   @@index([slug])
   @@index([userId])
   @@map("agent")
+}
+
+model AgentUptimeLog {
+  id        String      @id @default(cuid(2))
+  agentId   String
+  agent     Agent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  status    AgentStatus
+  timestamp DateTime    @default(now())
+
+  @@index([agentId])
+  @@index([agentId, timestamp])
+  @@map("agent_uptime_log")
 }
