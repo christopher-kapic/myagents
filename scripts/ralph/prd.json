@@ -560,7 +560,7 @@
         "Typecheck passes"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-032 for recording UI."
     },
     {

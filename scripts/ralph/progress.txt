@@ -619,3 +619,20 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - English-only models end with `.en` — use `model.endsWith(".en")` to detect
   - Route tree manual updates: add import, route config, type entries (FileRoutesByFullPath, FileRoutesByTo, FileRoutesById, fullPaths, to, id unions), FileRoutesByPath declaration, and children interface/const
 ---
+
+## 2026-03-18 - US-034
+- Added Web Speech API as a fallback speech-to-text backend alongside Whisper
+- Created `useWebSpeech` hook (`apps/web/src/hooks/use-web-speech.ts`) wrapping browser's SpeechRecognition API
+- Added `SpeechEngine` type ("whisper" | "web-speech") with localStorage persistence in `use-whisper.ts`
+- Updated `use-voice-recording.ts` to support both backends: Whisper (record → transcribe) and Web Speech (real-time recognition)
+- Auto-detect: if Whisper transcription takes >15s, suggest switching to Web Speech API in the conversation view
+- Updated voice settings page (`settings/voice.tsx`) with engine selector showing Whisper vs Web Speech API options
+- Whisper-specific settings (model, cache) hidden when Web Speech API is selected
+- Files changed: `apps/web/src/hooks/use-web-speech.ts` (new), `apps/web/src/hooks/use-whisper.ts`, `apps/web/src/hooks/use-voice-recording.ts`, `apps/web/src/routes/_auth/settings/voice.tsx`, `apps/web/src/routes/_auth/agents/$slug/conversations/$id.tsx`
+- **Learnings for future iterations:**
+  - Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`) isn't in standard TS types — define a `BrowserSpeechRecognition` interface locally and use `window as unknown as Record<string, unknown>` for detection
+  - Web Speech API `onresult` event has `results: SpeechRecognitionResultList` with `isFinal` per result — accumulate final results for the transcript
+  - `SpeechRecognition` errors "no-speech" and "aborted" are non-errors — filter them out
+  - The `use-voice-recording` hook now exposes `engine`, `setEngine`, `suggestWebSpeech`, and `dismissSuggestion` for UI integration
+  - For audio level visualization with Web Speech API, still capture mic via `getUserMedia` separately since SpeechRecognition handles its own audio stream
+---
