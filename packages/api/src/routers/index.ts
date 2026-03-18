@@ -4,6 +4,7 @@ import { env } from "@myagents/env/server";
 import { protectedProcedure, publicProcedure } from "../index";
 import { agentsRouter } from "./agents";
 import { apiKeysRouter } from "./apiKeys";
+import { conversationsRouter, messagesRouter } from "./conversations";
 import { pushRouter } from "./push";
 import { settingsRouter } from "./settings";
 
@@ -28,6 +29,8 @@ export const appRouter = {
   push: pushRouter,
   apiKeys: apiKeysRouter,
   agents: agentsRouter,
+  conversations: conversationsRouter,
+  messages: messagesRouter,
 };
 export type AppRouter = typeof appRouter;
 export type AppRouterClient = RouterClient<typeof appRouter>;
