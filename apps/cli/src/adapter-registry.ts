@@ -2,6 +2,7 @@ import type { DetectedAgent } from "./scanner.js";
 import type { AgentAdapter } from "./adapters/types.js";
 import { HermesAdapter } from "./adapters/hermes.js";
 import { OpenClawAdapter } from "./adapters/openclaw.js";
+import { CustomAdapter } from "./adapters/custom.js";
 
 /**
  * Create the appropriate adapter for a detected agent based on its type.
@@ -23,9 +24,22 @@ export function createAdapter(agent: DetectedAgent): AgentAdapter | null {
         configPath: config.configPath as string | undefined,
         gatewayUrl: config.gatewayUrl as string | undefined,
       });
-    case "custom":
-      // Custom adapter will be implemented in US-023
-      return null;
+    case "custom": {
+      const command = config.command as string | undefined;
+      if (!command) {
+        console.warn(`Custom agent "${agent.slug}" has no command configured — skipping adapter.`);
+        return null;
+      }
+      return new CustomAdapter(
+        {
+          command,
+          shell: (config.shell as boolean | undefined) ?? true,
+          streaming: (config.streaming as boolean | undefined) ?? false,
+          timeout: config.timeout as number | undefined,
+        },
+        agent.slug,
+      );
+    }
     default:
       return null;
   }

@@ -1,3 +1,4 @@
 export type { AgentAdapter, AgentStatus, HermesAdapterConfig, OpenClawAdapterConfig, CustomAdapterConfig } from "./types.js";
 export { HermesAdapter } from "./hermes.js";
 export { OpenClawAdapter } from "./openclaw.js";
+export { CustomAdapter } from "./custom.js";
