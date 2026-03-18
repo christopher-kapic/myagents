@@ -19,7 +19,8 @@
     "db:start": "turbo -F @myagents/db db:start",
     "db:watch": "turbo -F @myagents/db db:watch",
     "db:stop": "turbo -F @myagents/db db:stop",
-    "db:down": "turbo -F @myagents/db db:down"
+    "db:down": "turbo -F @myagents/db db:down",
+    "generate:vapid": "pnpm -F @myagents/api exec web-push generate-vapid-keys"
   },
   "dependencies": {
     "@myagents/env": "workspace:*",
