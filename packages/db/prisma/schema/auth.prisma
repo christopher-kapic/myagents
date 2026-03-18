@@ -17,6 +17,7 @@ model User {
   pushSubscriptions PushSubscription[]
   nodes             Node[]
   agents            Agent[]
+  conversations     Conversation[]
 
   @@unique([email])
   @@map("user")

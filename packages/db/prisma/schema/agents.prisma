@@ -40,6 +40,7 @@ model Agent {
   status        AgentStatus @default(offline)
   adapterConfig Json?
   shared        Boolean     @default(false)
+  conversations Conversation[]
 
   @@unique([userId, slug])
   @@index([nodeId])
