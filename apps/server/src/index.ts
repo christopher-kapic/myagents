@@ -12,7 +12,7 @@ import { createNodeWebSocket } from "@hono/node-ws";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { authenticateWebSocket, createWSHandlers } from "./ws";
+import { authenticateWebSocket, createWSHandlers, startHeartbeat } from "./ws";
 
 const app = new Hono();
 
@@ -124,3 +124,6 @@ const server = serve(
 );
 
 injectWebSocket(server);
+
+// Start WebSocket heartbeat system
+startHeartbeat();

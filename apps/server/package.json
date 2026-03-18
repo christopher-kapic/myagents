@@ -15,6 +15,7 @@
     "@myagents/api": "workspace:*",
     "@myagents/auth": "workspace:*",
     "@myagents/db": "workspace:*",
+    "@myagents/shared": "workspace:*",
     "@myagents/env": "workspace:*",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",

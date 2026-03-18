@@ -120,6 +120,9 @@ importers:
       '@myagents/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@myagents/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@orpc/openapi':
         specifier: 'catalog:'
         version: 1.13.7(crossws@0.3.5)(ws@8.19.0)
@@ -395,6 +398,19 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.15
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/shared:
+    dependencies:
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+    devDependencies:
+      '@myagents/config':
+        specifier: workspace:*
+        version: link:../config
       typescript:
         specifier: ^5
         version: 5.9.3

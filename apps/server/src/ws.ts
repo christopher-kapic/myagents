@@ -2,6 +2,13 @@ import type { WSContext } from "hono/ws";
 import { createHash } from "node:crypto";
 import prisma from "@myagents/db";
 import { auth } from "@myagents/auth";
+import {
+  parseFrame,
+  serializeFrame,
+  createResponseFrame,
+  createEventFrame,
+  type Frame,
+} from "@myagents/shared";
 
 interface ClientConnection {
   type: "client";
@@ -14,6 +21,7 @@ interface NodeConnection {
   userId: string;
   nodeId: string;
   ws: WSContext;
+  lastSeen: number;
 }
 
 type Connection = ClientConnection | NodeConnection;
@@ -190,6 +198,40 @@ async function handleNodeDisconnect(nodeId: string): Promise<void> {
 }
 
 /**
+ * Handle an incoming frame from a connection.
+ * Returns an optional response frame.
+ */
+function handleFrame(
+  frame: Frame,
+  connection: Connection,
+): Frame | null {
+  switch (frame.method) {
+    case "agent.heartbeat": {
+      if (connection.type === "node") {
+        connection.lastSeen = Date.now();
+        void prisma.node.update({
+          where: { id: connection.nodeId },
+          data: { lastSeen: new Date(), status: "online" },
+        });
+        return createResponseFrame("agent.heartbeat", { ok: true }, frame.id);
+      }
+      return null;
+    }
+
+    case "agent.register":
+    case "agent.status":
+    case "message.send":
+    case "message.response":
+    case "message.chunk":
+    case "message.done":
+    case "auth":
+      // These will be fully implemented in US-010 (message routing) and US-012 (agent registration)
+      console.log(`[WS] received ${frame.method} from ${connection.type}`);
+      return null;
+  }
+}
+
+/**
  * Create WebSocket event handlers for a connection.
  */
 export function createWSHandlers(authInfo: {
@@ -207,6 +249,7 @@ export function createWSHandlers(authInfo: {
           userId: authInfo.userId,
           nodeId: authInfo.nodeId,
           ws,
+          lastSeen: Date.now(),
         };
       } else {
         connection = {
@@ -222,8 +265,24 @@ export function createWSHandlers(authInfo: {
     },
 
     onMessage(event: MessageEvent, _ws: WSContext) {
-      // Message handling will be implemented in US-007/US-010
-      console.log(`[WS] message from ${authInfo.type}:`, event.data);
+      if (!connection) return;
+
+      const data = event.data;
+      const frame = parseFrame(typeof data === "string" ? data : String(data));
+      if (!frame) {
+        console.warn(`[WS] invalid frame from ${authInfo.type}:`, data);
+        return;
+      }
+
+      // Update lastSeen for node connections on any message
+      if (connection.type === "node") {
+        connection.lastSeen = Date.now();
+      }
+
+      const response = handleFrame(frame, connection);
+      if (response && connection.ws.readyState === 1) {
+        connection.ws.send(serializeFrame(response));
+      }
     },
 
     onClose() {
@@ -248,4 +307,45 @@ export function createWSHandlers(authInfo: {
       }
     },
   };
+}
+
+// ─── Heartbeat System ─────────────────────────────────────────────────────────
+
+const HEARTBEAT_INTERVAL_MS = 30_000; // Ping every 30 seconds
+const HEARTBEAT_TIMEOUT_MS = 90_000;  // Mark offline after 90 seconds of silence
+
+/**
+ * Start the heartbeat interval that pings node connections and marks
+ * unresponsive nodes as offline.
+ */
+export function startHeartbeat(): NodeJS.Timeout {
+  return setInterval(() => {
+    const now = Date.now();
+    const pingFrame = createEventFrame("agent.heartbeat", { ping: true });
+    const pingMessage = serializeFrame(pingFrame);
+
+    for (const [nodeId, conn] of nodeConnections) {
+      // Check if node has been silent too long
+      if (now - conn.lastSeen > HEARTBEAT_TIMEOUT_MS) {
+        console.log(`[WS] node ${nodeId} timed out (no heartbeat for ${HEARTBEAT_TIMEOUT_MS / 1000}s)`);
+        try {
+          conn.ws.close(4002, "Heartbeat timeout");
+        } catch {
+          // Connection may already be closed
+        }
+        connectionRegistry.removeConnection(conn);
+        void handleNodeDisconnect(nodeId);
+        continue;
+      }
+
+      // Send heartbeat ping
+      try {
+        if (conn.ws.readyState === 1) {
+          conn.ws.send(pingMessage);
+        }
+      } catch {
+        // Send failed, will be caught by timeout on next cycle
+      }
+    }
+  }, HEARTBEAT_INTERVAL_MS);
 }

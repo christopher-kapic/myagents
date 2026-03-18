@@ -1,0 +1,22 @@
+{
+  "name": "@myagents/shared",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {
+    "check-types": "tsc -b"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@myagents/config": "workspace:*",
+    "typescript": "^5"
+  }
+}
