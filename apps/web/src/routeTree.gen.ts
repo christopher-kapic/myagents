@@ -20,6 +20,7 @@ import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/i
 import { Route as AuthAgentsIndexRouteImport } from './routes/_auth/agents/index'
 import { Route as AuthSettingsSecurityRouteImport } from './routes/_auth/settings/security'
 import { Route as AuthSettingsApiKeysRouteImport } from './routes/_auth/settings/api-keys'
+import { Route as AuthSettingsVoiceRouteImport } from './routes/_auth/settings/voice'
 import { Route as AuthSettingsAdminRouteImport } from './routes/_auth/settings/admin'
 import { Route as AuthAgentsSlugRouteImport } from './routes/_auth/agents/$slug'
 import { Route as AuthAgentsSlugIndexRouteImport } from './routes/_auth/agents/$slug/index'
@@ -80,6 +81,11 @@ const AuthSettingsApiKeysRoute = AuthSettingsApiKeysRouteImport.update({
   path: '/api-keys',
   getParentRoute: () => AuthSettingsRoute,
 } as any)
+const AuthSettingsVoiceRoute = AuthSettingsVoiceRouteImport.update({
+  id: '/voice',
+  path: '/voice',
+  getParentRoute: () => AuthSettingsRoute,
+} as any)
 const AuthSettingsAdminRoute = AuthSettingsAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/settings/admin': typeof AuthSettingsAdminRoute
   '/settings/api-keys': typeof AuthSettingsApiKeysRoute
   '/settings/security': typeof AuthSettingsSecurityRoute
+  '/settings/voice': typeof AuthSettingsVoiceRoute
   '/agents/': typeof AuthAgentsIndexRoute
   '/settings/': typeof AuthSettingsIndexRoute
   '/agents/$slug/conversations': typeof AuthAgentsSlugConversationsRouteWithChildren
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/settings/admin': typeof AuthSettingsAdminRoute
   '/settings/api-keys': typeof AuthSettingsApiKeysRoute
   '/settings/security': typeof AuthSettingsSecurityRoute
+  '/settings/voice': typeof AuthSettingsVoiceRoute
   '/agents': typeof AuthAgentsIndexRoute
   '/settings': typeof AuthSettingsIndexRoute
   '/agents/$slug/conversations': typeof AuthAgentsSlugConversationsRouteWithChildren
@@ -152,6 +160,7 @@ export interface FileRoutesById {
   '/_auth/settings/admin': typeof AuthSettingsAdminRoute
   '/_auth/settings/api-keys': typeof AuthSettingsApiKeysRoute
   '/_auth/settings/security': typeof AuthSettingsSecurityRoute
+  '/_auth/settings/voice': typeof AuthSettingsVoiceRoute
   '/_auth/agents/': typeof AuthAgentsIndexRoute
   '/_auth/settings/': typeof AuthSettingsIndexRoute
   '/_auth/agents/$slug/conversations': typeof AuthAgentsSlugConversationsRouteWithChildren
@@ -171,6 +180,7 @@ export interface FileRouteTypes {
     | '/settings/admin'
     | '/settings/api-keys'
     | '/settings/security'
+    | '/settings/voice'
     | '/agents/'
     | '/settings/'
     | '/agents/$slug/conversations'
@@ -185,6 +195,7 @@ export interface FileRouteTypes {
     | '/settings/admin'
     | '/settings/api-keys'
     | '/settings/security'
+    | '/settings/voice'
     | '/agents'
     | '/settings'
     | '/agents/$slug/conversations'
@@ -203,6 +214,7 @@ export interface FileRouteTypes {
     | '/_auth/settings/admin'
     | '/_auth/settings/api-keys'
     | '/_auth/settings/security'
+    | '/_auth/settings/voice'
     | '/_auth/agents/'
     | '/_auth/settings/'
     | '/_auth/agents/$slug/conversations'
@@ -295,6 +307,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthSettingsApiKeysRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
+    '/_auth/settings/voice': {
+      id: '/_auth/settings/voice'
+      path: '/voice'
+      fullPath: '/settings/voice'
+      preLoaderRoute: typeof AuthSettingsVoiceRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
     '/_auth/settings/admin': {
       id: '/_auth/settings/admin'
       path: '/admin'
@@ -380,6 +399,7 @@ interface AuthSettingsRouteChildren {
   AuthSettingsAdminRoute: typeof AuthSettingsAdminRoute
   AuthSettingsApiKeysRoute: typeof AuthSettingsApiKeysRoute
   AuthSettingsSecurityRoute: typeof AuthSettingsSecurityRoute
+  AuthSettingsVoiceRoute: typeof AuthSettingsVoiceRoute
   AuthSettingsIndexRoute: typeof AuthSettingsIndexRoute
 }
 
@@ -387,6 +407,7 @@ const AuthSettingsRouteChildren: AuthSettingsRouteChildren = {
   AuthSettingsAdminRoute: AuthSettingsAdminRoute,
   AuthSettingsApiKeysRoute: AuthSettingsApiKeysRoute,
   AuthSettingsSecurityRoute: AuthSettingsSecurityRoute,
+  AuthSettingsVoiceRoute: AuthSettingsVoiceRoute,
   AuthSettingsIndexRoute: AuthSettingsIndexRoute,
 }
 
