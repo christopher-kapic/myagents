@@ -1,10 +1,19 @@
 import { Button } from "@myagents/ui/components/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@myagents/ui/components/dropdown-menu";
 import { Skeleton } from "@myagents/ui/components/skeleton";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Bot,
+  Download,
+  FileJson,
+  FileText,
   Loader2,
   Mic,
   MicOff,
@@ -23,6 +32,12 @@ import {
 import { useVoiceRecording } from "@/hooks/use-voice-recording";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useConversationSidebar } from "@/routes/_auth/agents/$slug/conversations";
+import {
+  downloadFile,
+  formatConversationAsJSON,
+  formatConversationAsMarkdown,
+  makeExportFilename,
+} from "@/utils/export";
 import { orpc } from "@/utils/orpc";
 
 export const Route = createFileRoute(
@@ -247,6 +262,29 @@ function ConversationPage() {
     return unsubscribe;
   }, [id, subscribe, queryClient]);
 
+  // Export conversation as Markdown or JSON
+  const handleExport = useCallback(
+    (format: "markdown" | "json") => {
+      const convTitle =
+        conversationQuery.data && (conversationQuery.data as Record<string, unknown>).title
+          ? String((conversationQuery.data as Record<string, unknown>).title)
+          : null;
+      const conv = {
+        title: convTitle,
+        messages: localMessages.filter((m) => !m.pending && !m.error),
+      };
+      const filename = makeExportFilename(slug, convTitle, format);
+      if (format === "markdown") {
+        const content = formatConversationAsMarkdown(conv, slug);
+        downloadFile(content, filename, "text/markdown");
+      } else {
+        const content = formatConversationAsJSON(conv, slug);
+        downloadFile(content, filename, "application/json");
+      }
+    },
+    [conversationQuery.data, localMessages, slug],
+  );
+
   // Send message via WebSocket
   const handleSend = useCallback(() => {
     const content = inputValue.trim();
@@ -360,6 +398,36 @@ function ConversationPage() {
             )}
           </p>
         </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <button
+                type="button"
+                className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent shrink-0"
+              />
+            }
+          >
+            <Download className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() =>
+                handleExport("markdown")
+              }
+            >
+              <FileText className="h-4 w-4" />
+              Export as Markdown
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() =>
+                handleExport("json")
+              }
+            >
+              <FileJson className="h-4 w-4" />
+              Export as JSON
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Messages */}

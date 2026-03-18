@@ -24,6 +24,10 @@ import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Bot,
+  Download,
+  FileJson,
+  FileText,
+  Loader2,
   MessageSquare,
   Plus,
   Search,
@@ -36,6 +40,13 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@myagents/ui/components/dropdown-menu";
+import { downloadFile, makeExportFilename } from "@/utils/export";
 import { orpc } from "@/utils/orpc";
 
 export const Route = createFileRoute("/_auth/agents/$slug/")({
@@ -224,6 +235,7 @@ function ConversationsTab({
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [exporting, setExporting] = useState(false);
 
   const conversationsQuery = useQuery(
     orpc.conversations.list.queryOptions({ input: { agentId } }),
@@ -248,6 +260,28 @@ function ConversationsTab({
     await createMutation.mutateAsync();
   };
 
+  const handleBulkExport = async (format: "markdown" | "json") => {
+    setExporting(true);
+    try {
+      const result = await orpc.conversations.exportBulk.call({
+        agentId,
+        format,
+      });
+      const data = result as Record<string, unknown>;
+      const date = new Date().toISOString().split("T")[0];
+
+      if (format === "json") {
+        const content = JSON.stringify(data, null, 2);
+        downloadFile(content, `${slug}_all-conversations_${date}.json`, "application/json");
+      } else {
+        const content = String(data.content);
+        downloadFile(content, `${slug}_all-conversations_${date}.md`, "text/markdown");
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const conversations = (conversationsQuery.data ?? []) as Array<
     Record<string, unknown>
   >;
@@ -256,14 +290,42 @@ function ConversationsTab({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium">Conversations</h2>
-        <Button
-          size="sm"
-          onClick={handleNewConversation}
-          disabled={createMutation.isPending}
-        >
-          <Plus className="h-4 w-4 mr-1" />
-          New Conversation
-        </Button>
+        <div className="flex items-center gap-2">
+          {conversations.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button variant="outline" size="sm" disabled={exporting} />
+                }
+              >
+                {exporting ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-1" />
+                )}
+                Export All
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleBulkExport("markdown")}>
+                  <FileText className="h-4 w-4" />
+                  Export as Markdown
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleBulkExport("json")}>
+                  <FileJson className="h-4 w-4" />
+                  Export as JSON
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <Button
+            size="sm"
+            onClick={handleNewConversation}
+            disabled={createMutation.isPending}
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            New Conversation
+          </Button>
+        </div>
       </div>
 
       {conversationsQuery.isLoading ? (

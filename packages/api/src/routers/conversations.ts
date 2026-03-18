@@ -348,6 +348,94 @@ export const conversationsRouter = {
         nextCursor: hasMore ? items[items.length - 1]!.id : null,
       };
     }),
+
+  exportBulk: protectedProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        format: z.enum(["markdown", "json"]),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+
+      // Verify the agent belongs to the user
+      const agent = await prisma.agent.findUnique({
+        where: { id: input.agentId },
+        select: { userId: true, slug: true, name: true },
+      });
+
+      if (!agent || agent.userId !== userId) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Agent not found",
+        });
+      }
+
+      const conversations = await prisma.conversation.findMany({
+        where: { userId, agentId: input.agentId },
+        select: {
+          id: true,
+          title: true,
+          createdAt: true,
+          messages: {
+            select: {
+              content: true,
+              senderType: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: "asc" },
+          },
+        },
+        orderBy: { updatedAt: "desc" },
+      });
+
+      if (input.format === "json") {
+        return {
+          agentSlug: agent.slug,
+          agentName: agent.name,
+          exportedAt: new Date().toISOString(),
+          conversations: conversations.map((conv) => ({
+            id: conv.id,
+            title: conv.title,
+            createdAt: conv.createdAt,
+            messages: conv.messages.map((msg) => ({
+              senderType: String(msg.senderType),
+              content: msg.content,
+              createdAt: msg.createdAt,
+            })),
+          })),
+        };
+      }
+
+      // Markdown format
+      const lines: string[] = [
+        `# Conversations with ${agent.name} (${agent.slug})`,
+        `Exported: ${new Date().toISOString()}`,
+        "",
+      ];
+
+      for (const conv of conversations) {
+        const title = conv.title || "Untitled conversation";
+        lines.push(`## ${title}`);
+        lines.push(
+          `Started: ${conv.createdAt.toISOString()} | Messages: ${conv.messages.length}`,
+        );
+        lines.push("");
+
+        for (const msg of conv.messages) {
+          const sender = String(msg.senderType) === "user" ? "User" : "Agent";
+          const time = msg.createdAt.toISOString();
+          lines.push(`**${sender}** (${time}):`);
+          lines.push(msg.content);
+          lines.push("");
+        }
+
+        lines.push("---");
+        lines.push("");
+      }
+
+      return { content: lines.join("\n"), agentSlug: agent.slug };
+    }),
 };
 
 export const messagesRouter = {
