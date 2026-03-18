@@ -600,10 +600,67 @@ async function handleAgentList(
 // ─── Message Routing ──────────────────────────────────────────────────────────
 
 /**
- * Handle message.send from a web client:
+ * Tracks agent-to-agent conversations so responses can be routed back
+ * to the sender agent's node. Maps conversationId → sender info.
+ */
+interface A2AConversationInfo {
+  senderAgentId: string;
+  senderAgentSlug: string;
+  senderNodeId: string;
+  senderUserId: string;
+}
+const a2aConversations = new Map<string, A2AConversationInfo>();
+
+/**
+ * Resolve a target agent address. Accepts:
+ *  - bare slug: resolves to the requesting user's agent
+ *  - username/slug: resolves to a cross-user agent
+ * Returns the agent record or null.
+ */
+async function resolveTargetAgent(
+  targetAddress: string,
+  requestingUserId: string,
+): Promise<{
+  id: string;
+  slug: string;
+  nodeId: string;
+  status: string;
+  userId: string;
+  name: string;
+} | null> {
+  const parts = targetAddress.split("/");
+
+  if (parts.length === 2 && parts[0] && parts[1]) {
+    // Cross-user: username/slug
+    const username = parts[0];
+    const slug = parts[1];
+    const targetUser = await prisma.user.findFirst({
+      where: { username },
+      select: { id: true },
+    });
+    if (!targetUser) return null;
+
+    const agent = await prisma.agent.findUnique({
+      where: { userId_slug: { userId: targetUser.id, slug } },
+      select: { id: true, slug: true, nodeId: true, status: true, userId: true, name: true },
+    });
+    return agent ?? null;
+  }
+
+  // Bare slug: same user's agent
+  const agent = await prisma.agent.findUnique({
+    where: { userId_slug: { userId: requestingUserId, slug: targetAddress } },
+    select: { id: true, slug: true, nodeId: true, status: true, userId: true, name: true },
+  });
+  return agent ?? null;
+}
+
+/**
+ * Handle message.send from a web client or a node (agent-to-agent):
  * 1. Look up the target agent and its node connection
- * 2. Create/get conversation and save user message to DB
- * 3. Forward to the agent's CLI node via WebSocket
+ * 2. For A2A: check permissions via AgentPermission
+ * 3. Create/get conversation and save message to DB
+ * 4. Forward to the target agent's CLI node via WebSocket
  */
 async function handleMessageSend(
   frame: Frame,
@@ -611,10 +668,28 @@ async function handleMessageSend(
 ): Promise<Frame | null> {
   const payload = frame.payload as {
     agentSlug?: string;
+    targetAgent?: string;
+    senderAgent?: string;
     conversationId?: string;
     content?: string;
   };
 
+  // Agent-to-agent: node connection with senderAgent and targetAgent
+  if (
+    connection.type === "node" &&
+    payload?.senderAgent &&
+    payload?.targetAgent &&
+    payload?.content
+  ) {
+    return handleAgentToAgentSend(frame, connection, payload as {
+      senderAgent: string;
+      targetAgent: string;
+      content: string;
+      conversationId?: string;
+    });
+  }
+
+  // User-to-agent: original flow
   if (!payload?.agentSlug || !payload?.content) {
     return createResponseFrame(
       "message.send",
@@ -710,8 +785,213 @@ async function handleMessageSend(
 }
 
 /**
+ * Handle agent-to-agent message routing:
+ * 1. Resolve sender and target agents
+ * 2. Check AgentPermission (sender → target)
+ * 3. Create/continue conversation between agents
+ * 4. Save message, forward to target node, track for response routing
+ */
+async function handleAgentToAgentSend(
+  frame: Frame,
+  connection: NodeConnection,
+  payload: {
+    senderAgent: string;
+    targetAgent: string;
+    content: string;
+    conversationId?: string;
+  },
+): Promise<Frame | null> {
+  const { senderAgent: senderSlug, targetAgent: targetAddress, content } = payload;
+  const userId = connection.userId;
+
+  // Resolve sender agent (must belong to this node's user)
+  const senderAgent = await prisma.agent.findUnique({
+    where: { userId_slug: { userId, slug: senderSlug } },
+    select: { id: true, slug: true, nodeId: true, name: true },
+  });
+
+  if (!senderAgent) {
+    return createResponseFrame(
+      "message.send",
+      undefined,
+      frame.id,
+      `Sender agent "${senderSlug}" not found`,
+    );
+  }
+
+  // Verify sender agent runs on this node
+  if (senderAgent.nodeId !== connection.nodeId) {
+    return createResponseFrame(
+      "message.send",
+      undefined,
+      frame.id,
+      `Sender agent "${senderSlug}" is not on this node`,
+    );
+  }
+
+  // Resolve target agent (bare slug or username/slug)
+  const targetAgent = await resolveTargetAgent(targetAddress, userId);
+  if (!targetAgent) {
+    return createResponseFrame(
+      "message.send",
+      undefined,
+      frame.id,
+      `Target agent "${targetAddress}" not found`,
+    );
+  }
+
+  // Prevent self-messaging
+  if (senderAgent.id === targetAgent.id) {
+    return createResponseFrame(
+      "message.send",
+      undefined,
+      frame.id,
+      "An agent cannot send messages to itself",
+    );
+  }
+
+  // Check permission: sender → target
+  const permission = await prisma.agentPermission.findUnique({
+    where: {
+      agentId_targetAgentId: {
+        agentId: senderAgent.id,
+        targetAgentId: targetAgent.id,
+      },
+    },
+  });
+
+  if (!permission) {
+    return createResponseFrame(
+      "message.send",
+      undefined,
+      frame.id,
+      `Agent "${senderSlug}" does not have permission to message "${targetAddress}"`,
+    );
+  }
+
+  // For cross-user targets, verify the target agent is shared
+  if (targetAgent.userId !== userId && !await isAgentShared(targetAgent.id)) {
+    return createResponseFrame(
+      "message.send",
+      undefined,
+      frame.id,
+      `Target agent "${targetAddress}" is not shared`,
+    );
+  }
+
+  // Check if target node is connected
+  const targetNodeConn = connectionRegistry.getNodeConnection(targetAgent.nodeId);
+  if (!targetNodeConn || targetNodeConn.ws.readyState !== 1) {
+    return createResponseFrame(
+      "message.send",
+      undefined,
+      frame.id,
+      `Target agent "${targetAddress}" is offline`,
+    );
+  }
+
+  // Get or create conversation between the two agents
+  // Conversation is owned by the sender's user, with agentId = target agent
+  let conversationId = payload.conversationId;
+  if (!conversationId) {
+    // Look for an existing conversation between these agents
+    const existingConversation = await prisma.conversation.findFirst({
+      where: {
+        userId,
+        agentId: targetAgent.id,
+        // Check that the last message was from the sender agent
+        messages: {
+          some: {
+            senderType: "agent",
+            senderId: senderAgent.id,
+          },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true },
+    });
+
+    if (existingConversation) {
+      conversationId = existingConversation.id;
+    } else {
+      const conversation = await prisma.conversation.create({
+        data: {
+          userId,
+          agentId: targetAgent.id,
+          title: `${senderAgent.name} → ${targetAgent.name}`,
+        },
+        select: { id: true },
+      });
+      conversationId = conversation.id;
+    }
+  } else {
+    // Verify conversation exists
+    const conversation = await prisma.conversation.findFirst({
+      where: { id: conversationId },
+      select: { id: true },
+    });
+    if (!conversation) {
+      return createResponseFrame(
+        "message.send",
+        undefined,
+        frame.id,
+        "Conversation not found",
+      );
+    }
+  }
+
+  // Save sender agent message to DB
+  const message = await prisma.message.create({
+    data: {
+      conversationId,
+      senderType: "agent",
+      senderId: senderAgent.id,
+      content,
+    },
+    select: { id: true },
+  });
+
+  // Track this as an A2A conversation for response routing
+  a2aConversations.set(conversationId, {
+    senderAgentId: senderAgent.id,
+    senderAgentSlug: senderAgent.slug,
+    senderNodeId: connection.nodeId,
+    senderUserId: userId,
+  });
+
+  // Forward to target agent's CLI node
+  const forwardFrame = createRequestFrame("message.send", {
+    conversationId,
+    agentSlug: targetAgent.slug,
+    content,
+    messageId: message.id,
+    senderAgent: senderAgent.slug,
+  });
+  targetNodeConn.ws.send(serializeFrame(forwardFrame));
+
+  // Respond to sender with conversation and message IDs
+  return createResponseFrame(
+    "message.send",
+    { conversationId, messageId: message.id },
+    frame.id,
+  );
+}
+
+/**
+ * Check if an agent has shared=true.
+ */
+async function isAgentShared(agentId: string): Promise<boolean> {
+  const agent = await prisma.agent.findUnique({
+    where: { id: agentId },
+    select: { shared: true },
+  });
+  return agent?.shared === true;
+}
+
+/**
  * Handle message.response from CLI:
- * Forward the full response to the user's WebSocket connection(s).
+ * Forward the full response to the user's WebSocket connection(s),
+ * and/or to the sender agent's node for A2A conversations.
  */
 async function handleMessageResponse(
   frame: Frame,
@@ -726,14 +1006,27 @@ async function handleMessageResponse(
 
   if (!payload?.conversationId || !payload?.content) return null;
 
-  // Look up the conversation to find the user
+  // Check if this is an A2A conversation — route to sender agent's node
+  const a2aInfo = a2aConversations.get(payload.conversationId);
+  if (a2aInfo) {
+    const senderNodeConn = connectionRegistry.getNodeConnection(a2aInfo.senderNodeId);
+    if (senderNodeConn && senderNodeConn.ws.readyState === 1) {
+      const eventFrame = createEventFrame("message.response", {
+        conversationId: payload.conversationId,
+        content: payload.content,
+        targetAgent: a2aInfo.senderAgentSlug,
+      });
+      senderNodeConn.ws.send(serializeFrame(eventFrame));
+    }
+  }
+
+  // Also forward to user's client connections (so they can see in the UI)
   const conversation = await prisma.conversation.findUnique({
     where: { id: payload.conversationId },
     select: { userId: true },
   });
   if (!conversation) return null;
 
-  // Forward to user's client connections
   const clientConns = connectionRegistry.getClientConnections(
     conversation.userId,
   );
@@ -753,7 +1046,8 @@ async function handleMessageResponse(
 
 /**
  * Handle message.chunk from CLI:
- * Forward streaming chunks to the user's WebSocket connection(s).
+ * Forward streaming chunks to the user's WebSocket connection(s),
+ * and/or to the sender agent's node for A2A conversations.
  */
 async function handleMessageChunk(
   frame: Frame,
@@ -768,14 +1062,27 @@ async function handleMessageChunk(
 
   if (!payload?.conversationId || payload?.chunk === undefined) return null;
 
-  // Look up the conversation to find the user
+  // Check if this is an A2A conversation — route chunks to sender agent's node
+  const a2aInfo = a2aConversations.get(payload.conversationId);
+  if (a2aInfo) {
+    const senderNodeConn = connectionRegistry.getNodeConnection(a2aInfo.senderNodeId);
+    if (senderNodeConn && senderNodeConn.ws.readyState === 1) {
+      const eventFrame = createEventFrame("message.chunk", {
+        conversationId: payload.conversationId,
+        chunk: payload.chunk,
+        targetAgent: a2aInfo.senderAgentSlug,
+      });
+      senderNodeConn.ws.send(serializeFrame(eventFrame));
+    }
+  }
+
+  // Also forward to user's client connections
   const conversation = await prisma.conversation.findUnique({
     where: { id: payload.conversationId },
     select: { userId: true },
   });
   if (!conversation) return null;
 
-  // Forward chunk to user's client connections
   const clientConns = connectionRegistry.getClientConnections(
     conversation.userId,
   );
@@ -795,7 +1102,8 @@ async function handleMessageChunk(
 
 /**
  * Handle message.done from CLI:
- * Save the complete agent message to DB and notify the user.
+ * Save the complete agent message to DB, notify the user,
+ * and route back to sender agent's node for A2A conversations.
  */
 async function handleMessageDone(
   frame: Frame,
@@ -837,6 +1145,23 @@ async function handleMessageDone(
     where: { id: payload.conversationId },
     data: { updatedAt: new Date() },
   });
+
+  // Check if this is an A2A conversation — route done event to sender agent's node
+  const a2aInfo = a2aConversations.get(payload.conversationId);
+  if (a2aInfo) {
+    const senderNodeConn = connectionRegistry.getNodeConnection(a2aInfo.senderNodeId);
+    if (senderNodeConn && senderNodeConn.ws.readyState === 1) {
+      const doneFrame = createEventFrame("message.done", {
+        conversationId: payload.conversationId,
+        messageId: message.id,
+        content: payload.content,
+        targetAgent: a2aInfo.senderAgentSlug,
+      });
+      senderNodeConn.ws.send(serializeFrame(doneFrame));
+    }
+    // Clean up A2A tracking after done — conversation can be reused via conversationId
+    a2aConversations.delete(payload.conversationId);
+  }
 
   // Notify user's client connections
   const clientConns = connectionRegistry.getClientConnections(

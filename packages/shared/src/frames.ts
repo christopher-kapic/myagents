@@ -43,6 +43,7 @@ export const MessageSendPayload = z.object({
   agentSlug: z.string(),
   content: z.string(),
   senderAgent: z.string().optional(),
+  targetAgent: z.string().optional(),
 });
 export type MessageSendPayload = z.infer<typeof MessageSendPayload>;
 
