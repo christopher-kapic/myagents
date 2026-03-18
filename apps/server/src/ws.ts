@@ -235,12 +235,116 @@ async function handleFrame(
       return handleMessageDone(frame, connection);
     }
 
-    case "agent.register":
+    case "agent.register": {
+      return handleAgentRegister(frame, connection);
+    }
+
     case "agent.status":
     case "auth":
-      // These will be fully implemented in US-012 (agent registration)
       console.log(`[WS] received ${frame.method} from ${connection.type}`);
       return null;
+  }
+}
+
+// ─── Agent Registration ───────────────────────────────────────────────────────
+
+/**
+ * Handle agent.register from a CLI node:
+ * Upsert the agent record in the database, linking it to the node and user.
+ */
+async function handleAgentRegister(
+  frame: Frame,
+  connection: Connection,
+): Promise<Frame | null> {
+  if (connection.type !== "node") {
+    return createResponseFrame(
+      "agent.register",
+      undefined,
+      frame.id,
+      "Only node connections can register agents",
+    );
+  }
+
+  const payload = frame.payload as {
+    slug?: string;
+    name?: string;
+    description?: string;
+    type?: string;
+    adapterConfig?: Record<string, unknown>;
+  };
+
+  if (!payload?.slug || !payload?.name) {
+    return createResponseFrame(
+      "agent.register",
+      undefined,
+      frame.id,
+      "Missing required fields: slug, name",
+    );
+  }
+
+  // Validate slug format: [a-zA-Z0-9-]+ only
+  if (!/^[a-zA-Z0-9-]+$/.test(payload.slug)) {
+    return createResponseFrame(
+      "agent.register",
+      undefined,
+      frame.id,
+      "Invalid slug format: must match [a-zA-Z0-9-]+",
+    );
+  }
+
+  const agentType = payload.type === "hermes" || payload.type === "openclaw"
+    ? payload.type
+    : "custom";
+
+  try {
+    // Upsert: create if not exists, update if exists
+    const agent = await prisma.agent.upsert({
+      where: {
+        userId_slug: {
+          userId: connection.userId,
+          slug: payload.slug,
+        },
+      },
+      update: {
+        name: payload.name,
+        description: payload.description ?? null,
+        type: agentType,
+        nodeId: connection.nodeId,
+        status: "online",
+        adapterConfig: payload.adapterConfig
+          ? JSON.parse(JSON.stringify(payload.adapterConfig))
+          : undefined,
+      },
+      create: {
+        slug: payload.slug,
+        name: payload.name,
+        description: payload.description ?? null,
+        type: agentType,
+        nodeId: connection.nodeId,
+        userId: connection.userId,
+        status: "online",
+        adapterConfig: payload.adapterConfig
+          ? JSON.parse(JSON.stringify(payload.adapterConfig))
+          : undefined,
+      },
+      select: { id: true, slug: true, name: true },
+    });
+
+    console.log(`[WS] agent registered: ${agent.slug} (${agent.id}) on node ${connection.nodeId}`);
+
+    return createResponseFrame(
+      "agent.register",
+      { agentId: agent.id, slug: agent.slug, name: agent.name },
+      frame.id,
+    );
+  } catch (err) {
+    console.error("[WS] agent registration error:", err);
+    return createResponseFrame(
+      "agent.register",
+      undefined,
+      frame.id,
+      "Failed to register agent",
+    );
   }
 }
 

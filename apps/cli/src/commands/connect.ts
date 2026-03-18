@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { resolveApiKey, resolveServerUrl, resolveNodeId } from "../config.js";
 import { WsClient } from "../ws-client.js";
+import { scanForAgents, type DetectedAgent } from "../scanner.js";
 import type { Frame } from "@myagents/shared";
 
 export const connectCommand = new Command("connect")
@@ -21,6 +22,16 @@ export const connectCommand = new Command("connect")
     const serverUrl = opts.server ?? resolveServerUrl();
     const nodeId = opts.nodeId ?? resolveNodeId();
 
+    // Scan for agents before connecting
+    console.log("Scanning for agents...");
+    const detectedAgents = scanForAgents();
+
+    if (detectedAgents.length === 0) {
+      console.log("No agents detected on this machine.");
+    } else {
+      console.log(`Found ${detectedAgents.length} agent(s).`);
+    }
+
     console.log(`Connecting to ${serverUrl}...`);
     console.log(`Node ID: ${nodeId}`);
 
@@ -30,6 +41,12 @@ export const connectCommand = new Command("connect")
       nodeId,
       onOpen() {
         console.log("Connected to server.");
+
+        // Register detected agents with the server
+        if (detectedAgents.length > 0) {
+          registerAgents(client, detectedAgents);
+        }
+
         console.log("Waiting for messages... (Ctrl+C to disconnect)");
       },
       onFrame(frame: Frame) {
@@ -58,6 +75,22 @@ export const connectCommand = new Command("connect")
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
   });
+
+/**
+ * Register detected agents with the server via WebSocket.
+ */
+function registerAgents(client: WsClient, agents: DetectedAgent[]): void {
+  for (const agent of agents) {
+    console.log(`Registering agent: ${agent.name} (${agent.slug})`);
+    client.sendRequest("agent.register", {
+      slug: agent.slug,
+      name: agent.name,
+      description: agent.description,
+      type: agent.type,
+      adapterConfig: agent.adapterConfig,
+    });
+  }
+}
 
 function handleFrame(frame: Frame, client: WsClient): void {
   switch (frame.method) {
