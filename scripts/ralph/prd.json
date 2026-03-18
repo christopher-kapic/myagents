@@ -405,7 +405,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "Extends US-016 agent detail page. Follow overlay conventions from AGENTS.md."
     },
     {
@@ -423,7 +423,7 @@
         "Typecheck passes"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": "Uses AgentPermission model from US-003. Cross-user sharing requires both sides to opt in: owner shares the agent, other user grants their agent permission."
     },
     {
@@ -440,7 +440,7 @@
         "Typecheck passes"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-026. No information leaks — agents only see permitted targets. Cross-user agents display as username/slug."
     },
     {
@@ -459,7 +459,7 @@
         "Typecheck passes"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-010 and US-026. Cross-user routing uses username/slug addressing."
     },
     {

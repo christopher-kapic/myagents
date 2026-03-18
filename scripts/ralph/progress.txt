@@ -38,6 +38,8 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
 - API key auth for HTTP: `packages/api/src/context.ts` supports `Authorization: Bearer <key>` header as alternative to session cookies — CLI clients use this
 - WebSocket supports client connections with API key: `?type=client&apiKey=...` query params
 - oRPC HTTP wire format: POST to `/rpc/<router>/<procedure>` with JSON body
+- Agent-to-agent routing: node sends `message.send` with `senderAgent` + `targetAgent` fields; `a2aConversations` map tracks pending A2A for response routing
+- Target agent addressing: bare `slug` (same user) or `username/slug` (cross-user) — resolved by `resolveTargetAgent()` in ws.ts
 ---
 
 ## 2026-03-18 - US-001
@@ -459,4 +461,73 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - Commander supports nested subcommands via `new Command("parent").addCommand(child)` pattern
   - For interactive CLI prompts, use `node:readline` `createInterface` with promise wrapper around `rl.question`
   - Simple YAML writing: build YAML strings manually for flat structures with one level of nesting — no YAML library needed
+---
+
+## 2026-03-18 - US-025
+- Enhanced agent detail page settings tab with node information card and remove agent functionality
+- Node info: shows node name and online/offline status with colored indicator dot in both header and dedicated Node Information card
+- Remove agent: type-to-confirm dialog (type agent slug to enable Remove button), uses `agents.remove` oRPC route, navigates to `/agents` on success
+- Danger Zone card with destructive border styling, clear warning about permanent deletion
+- Files changed: `apps/web/src/routes/_auth/agents/$slug/index.tsx` (modified)
+- **Learnings for future iterations:**
+  - Base UI Dialog pattern for type-to-confirm: controlled `open` state, reset `confirmText` on close via `onOpenChange`, disable confirm button until input matches
+  - `DialogTrigger` with `render={<Button variant="destructive" />}` for custom trigger styling
+  - Node status is available from `agent.node.status` (already included in the `agentSelect` via nested `node` select)
+  - Agent settings tab already had edit name/description from US-016 — US-025 extended it with node info and danger zone
+---
+
+## 2026-03-18 - US-026
+- Added permissions oRPC router with grant, revoke, list routes in `packages/api/src/routers/permissions.ts`
+- `permission.grant`: validates source agent ownership, checks target agent exists, enforces cross-user sharing rule (target must have `shared=true`), prevents self-permission, uses upsert for idempotency
+- `permission.revoke`: validates source agent ownership, deletes permission by compound key
+- `permission.list`: returns two sections — `canSendTo` (outgoing permissions) and `canReceiveFrom` (incoming permissions), each with full agent metadata including owner username
+- Added `agent.share` and `agent.unshare` routes to `packages/api/src/routers/agents.ts` — toggle the `shared` boolean flag on owned agents
+- Registered `permissionsRouter` in `packages/api/src/routers/index.ts`
+- All routes use `protectedProcedure`, enforce ownership checks
+- Files changed: `packages/api/src/routers/permissions.ts` (new), `packages/api/src/routers/agents.ts` (modified), `packages/api/src/routers/index.ts` (modified)
+- **Learnings for future iterations:**
+  - Permissions are directional: A→B grant stored as `{ agentId: A, targetAgentId: B }` — does NOT imply B→A
+  - Cross-user permission enforcement: only allow granting to another user's agent if `target.shared === true`
+  - Use `upsert` with compound unique key for idempotent grant operations — avoids duplicate permission errors on repeated grants
+  - Permission list returns both directions (canSendTo/canReceiveFrom) with serialized enum values (String() pattern) and owner username for cross-user display
+  - Same ownership check pattern as other routes: `findUnique` + compare `userId` to `context.session.user.id`
+---
+
+## 2026-03-18 - US-027
+- Implemented permission-gated agent discovery via both WebSocket and oRPC HTTP
+- Added `agent.list` frame method to `packages/shared/src/frames.ts` with `AgentListPayload` schema
+- Added WebSocket `handleAgentList` handler in `apps/server/src/ws.ts`:
+  - Node connections with `senderAgentSlug`: queries `AgentPermission` where `agentId = sender`, returns only permitted target agents with owner username for cross-user agents (displayed as `username/slug`)
+  - Client connections: returns own agents + shared agents from other users (same logic as oRPC route)
+- Updated `agents.list` oRPC route in `packages/api/src/routers/agents.ts`:
+  - Added optional `forAgentSlug` input parameter for agent-perspective queries
+  - When provided, returns only agents the specified agent has permission to send to (via `AgentPermission` table)
+  - Response includes `permitted` array (separate from `own`/`shared`) with `owner` and `address` fields for cross-user agents
+- Exported `AgentListPayload` from `packages/shared/src/index.ts`
+- Files changed: `packages/shared/src/frames.ts`, `packages/shared/src/index.ts`, `apps/server/src/ws.ts`, `packages/api/src/routers/agents.ts`
+- **Learnings for future iterations:**
+  - Agent-perspective discovery uses `AgentPermission.agentId` to find what a specific agent can see — different from user-perspective which uses `createdBy`
+  - WebSocket `agent.list` handler distinguishes node vs client connections: node + senderAgentSlug = agent-perspective, client = user-perspective
+  - The `address` field in response provides ready-to-use addressing: bare `slug` for same-user agents, `username/slug` for cross-user
+  - oRPC route returns `permitted` array (instead of `own`/`shared`) when `forAgentSlug` is specified — keeps backward compatibility
+  - Prisma nested where on relation fields works for filtering permissions by target agent properties (type, status, search)
+---
+
+## 2026-03-18 - US-028
+- Implemented agent-to-agent message routing in the WebSocket handler (`apps/server/src/ws.ts`)
+- Added `targetAgent` field to `MessageSendPayload` in `packages/shared/src/frames.ts`
+- Added `resolveTargetAgent()` helper that resolves bare slug (same-user) or username/slug (cross-user) to an agent record
+- Added `handleAgentToAgentSend()` handler with full permission checking (AgentPermission + shared flag for cross-user)
+- Added `a2aConversations` in-memory map to track A2A conversations for response routing
+- Modified `handleMessageResponse`, `handleMessageChunk`, `handleMessageDone` to also route to sender agent's node for A2A conversations
+- A2A conversations auto-create with title "SenderName → TargetName", or reuse existing conversations
+- All A2A messages stored in DB with senderType='agent' and senderId=senderAgent.id
+- Files changed: `apps/server/src/ws.ts`, `packages/shared/src/frames.ts`
+- **Learnings for future iterations:**
+  - A2A routing needs an in-memory tracking map (`a2aConversations`) since the conversation model doesn't distinguish who initiated the message flow
+  - The `message.send` handler now branches: node + senderAgent + targetAgent → A2A path, otherwise → user-to-agent path
+  - Response routing for A2A sends to BOTH the sender agent's node AND the conversation owner's client connections (so users can watch A2A conversations in the UI)
+  - Cross-user A2A requires both permission check (AgentPermission exists) AND shared flag check (target agent must be shared)
+  - A2A tracking is cleaned up on `message.done` — reuse the conversationId for subsequent messages in the same conversation
+  - `resolveTargetAgent()` pattern: split on "/", if 2 parts → cross-user lookup via username, else → same-user lookup via userId_slug compound key
 ---
