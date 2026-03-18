@@ -46,6 +46,7 @@ export const agentsRouter = {
           type: z.enum(["hermes", "openclaw", "custom"]).optional(),
           status: z.enum(["online", "offline"]).optional(),
           nodeId: z.string().optional(),
+          forAgentSlug: z.string().optional(),
         })
         .optional(),
     )
@@ -53,6 +54,67 @@ export const agentsRouter = {
       const userId = context.session.user.id;
       const filters = input ?? {};
 
+      // Agent-perspective: return only agents the specified agent has permission to send to
+      if (filters.forAgentSlug) {
+        const senderAgent = await prisma.agent.findUnique({
+          where: { userId_slug: { userId, slug: filters.forAgentSlug } },
+          select: { id: true },
+        });
+
+        if (!senderAgent) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Agent not found",
+          });
+        }
+
+        const permissionWhere: Record<string, unknown> = {
+          agentId: senderAgent.id,
+        };
+
+        const targetFilters: Record<string, unknown> = {};
+        if (filters.type) targetFilters.type = filters.type;
+        if (filters.status) targetFilters.status = filters.status;
+        if (filters.search) {
+          targetFilters.OR = [
+            { name: { contains: filters.search, mode: "insensitive" } },
+            { slug: { contains: filters.search, mode: "insensitive" } },
+            { description: { contains: filters.search, mode: "insensitive" } },
+          ];
+        }
+        if (Object.keys(targetFilters).length > 0) {
+          permissionWhere.targetAgent = targetFilters;
+        }
+
+        const permissions = await prisma.agentPermission.findMany({
+          where: permissionWhere,
+          select: {
+            targetAgent: {
+              select: agentWithOwnerSelect,
+            },
+          },
+        });
+
+        const agents = permissions.map((p) => {
+          const agent = p.targetAgent as Record<string, unknown>;
+          const isCrossUser = agent.userId !== userId;
+          const username = (agent.user as { username?: string | null } | null)?.username;
+          return {
+            ...serializeAgent(agent),
+            owner: isCrossUser ? (username ?? null) : null,
+            address: isCrossUser && username
+              ? `${username}/${String(agent.slug)}`
+              : String(agent.slug),
+          };
+        });
+
+        return {
+          own: [],
+          shared: [],
+          permitted: agents,
+        };
+      }
+
+      // User-perspective: own agents + shared agents
       const where: Record<string, unknown> = { userId };
 
       if (filters.type) where.type = filters.type;

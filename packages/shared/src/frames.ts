@@ -14,6 +14,7 @@ export const FrameMethod = z.enum([
   "agent.register",
   "agent.heartbeat",
   "agent.status",
+  "agent.list",
 ]);
 export type FrameMethod = z.infer<typeof FrameMethod>;
 
@@ -85,6 +86,11 @@ export const AgentStatusPayload = z.object({
   status: z.enum(["online", "offline"]),
 });
 export type AgentStatusPayload = z.infer<typeof AgentStatusPayload>;
+
+export const AgentListPayload = z.object({
+  senderAgentSlug: z.string().optional(),
+});
+export type AgentListPayload = z.infer<typeof AgentListPayload>;
 
 // ─── Frame Parsing ──────────────────────────────────────────────────────────
 

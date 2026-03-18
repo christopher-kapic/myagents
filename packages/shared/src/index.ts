@@ -10,6 +10,7 @@ export {
   AgentRegisterPayload,
   AgentHeartbeatPayload,
   AgentStatusPayload,
+  AgentListPayload,
   parseFrame,
   createFrame,
   serializeFrame,

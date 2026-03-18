@@ -252,6 +252,10 @@ async function handleFrame(
       return handleAgentRegister(frame, connection);
     }
 
+    case "agent.list": {
+      return handleAgentList(frame, connection);
+    }
+
     case "agent.status":
     case "auth":
       console.log(`[WS] received ${frame.method} from ${connection.type}`);
@@ -359,6 +363,238 @@ async function handleAgentRegister(
       "Failed to register agent",
     );
   }
+}
+
+// ─── Agent List (Permission-Gated Discovery) ─────────────────────────────────
+
+/**
+ * Handle agent.list from a connection:
+ *
+ * - Node connections with senderAgentSlug: return only agents the specified
+ *   agent has permission to send messages to (permission-gated discovery).
+ * - Client connections: return the user's own agents + shared agents from
+ *   other users that the user has permissions for.
+ */
+async function handleAgentList(
+  frame: Frame,
+  connection: Connection,
+): Promise<Frame | null> {
+  const payload = frame.payload as {
+    senderAgentSlug?: string;
+    search?: string;
+    type?: string;
+    status?: string;
+  };
+
+  const userId = connection.userId;
+
+  // Agent-perspective: node connection with senderAgentSlug
+  if (connection.type === "node" && payload?.senderAgentSlug) {
+    const senderAgent = await prisma.agent.findUnique({
+      where: {
+        userId_slug: { userId, slug: payload.senderAgentSlug },
+      },
+      select: { id: true },
+    });
+
+    if (!senderAgent) {
+      return createResponseFrame(
+        "agent.list",
+        undefined,
+        frame.id,
+        `Agent "${payload.senderAgentSlug}" not found`,
+      );
+    }
+
+    // Query permissions: find all agents this agent can send to
+    const permissionWhere: Record<string, unknown> = {
+      agentId: senderAgent.id,
+    };
+
+    // Build filters for the target agent
+    const targetFilters: Record<string, unknown> = {};
+    if (payload.type) targetFilters.type = payload.type;
+    if (payload.status) targetFilters.status = payload.status;
+    if (payload.search) {
+      targetFilters.OR = [
+        { name: { contains: payload.search, mode: "insensitive" } },
+        { slug: { contains: payload.search, mode: "insensitive" } },
+        { description: { contains: payload.search, mode: "insensitive" } },
+      ];
+    }
+
+    if (Object.keys(targetFilters).length > 0) {
+      permissionWhere.targetAgent = targetFilters;
+    }
+
+    const permissions = await prisma.agentPermission.findMany({
+      where: permissionWhere,
+      select: {
+        targetAgent: {
+          select: {
+            id: true,
+            slug: true,
+            name: true,
+            description: true,
+            type: true,
+            status: true,
+            shared: true,
+            userId: true,
+            node: { select: { id: true, name: true, status: true } },
+            user: { select: { username: true } },
+          },
+        },
+      },
+    });
+
+    const agents = permissions.map((p) => {
+      const agent = p.targetAgent;
+      const isCrossUser = agent.userId !== userId;
+      return {
+        id: agent.id,
+        slug: agent.slug,
+        name: agent.name,
+        description: agent.description,
+        type: String(agent.type),
+        status: String(agent.status),
+        shared: agent.shared,
+        node: agent.node
+          ? {
+              id: agent.node.id,
+              name: agent.node.name,
+              status: String(agent.node.status),
+            }
+          : null,
+        // Include owner username for cross-user agents (displayed as username/slug)
+        owner: isCrossUser ? (agent.user?.username ?? null) : null,
+        address: isCrossUser && agent.user?.username
+          ? `${agent.user.username}/${agent.slug}`
+          : agent.slug,
+      };
+    });
+
+    return createResponseFrame("agent.list", { agents }, frame.id);
+  }
+
+  // User-perspective: client connection — own agents + shared
+  const ownWhere: Record<string, unknown> = { userId };
+  if (payload?.type) ownWhere.type = payload.type;
+  if (payload?.status) ownWhere.status = payload.status;
+  if (payload?.search) {
+    ownWhere.OR = [
+      { name: { contains: payload.search, mode: "insensitive" } },
+      { slug: { contains: payload.search, mode: "insensitive" } },
+      { description: { contains: payload.search, mode: "insensitive" } },
+    ];
+  }
+
+  const ownAgents = await prisma.agent.findMany({
+    where: ownWhere,
+    select: {
+      id: true,
+      slug: true,
+      name: true,
+      description: true,
+      type: true,
+      status: true,
+      shared: true,
+      node: { select: { id: true, name: true, status: true } },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  // Find shared agents from other users
+  const sharedPermissions = await prisma.agentPermission.findMany({
+    where: {
+      createdBy: userId,
+      targetAgent: {
+        userId: { not: userId },
+        shared: true,
+      },
+    },
+    select: { targetAgentId: true },
+  });
+
+  const sharedAgentIds = sharedPermissions.map((p) => p.targetAgentId);
+  let sharedAgents: Array<Record<string, unknown>> = [];
+
+  if (sharedAgentIds.length > 0) {
+    const sharedWhere: Record<string, unknown> = {
+      id: { in: sharedAgentIds },
+    };
+    if (payload?.type) sharedWhere.type = payload.type;
+    if (payload?.status) sharedWhere.status = payload.status;
+    if (payload?.search) {
+      sharedWhere.OR = [
+        { name: { contains: payload.search, mode: "insensitive" } },
+        { slug: { contains: payload.search, mode: "insensitive" } },
+        { description: { contains: payload.search, mode: "insensitive" } },
+      ];
+    }
+
+    const results = await prisma.agent.findMany({
+      where: sharedWhere,
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        description: true,
+        type: true,
+        status: true,
+        shared: true,
+        userId: true,
+        node: { select: { id: true, name: true, status: true } },
+        user: { select: { username: true } },
+      },
+      orderBy: { name: "asc" },
+    });
+
+    sharedAgents = results.map((agent) => ({
+      id: agent.id,
+      slug: agent.slug,
+      name: agent.name,
+      description: agent.description,
+      type: String(agent.type),
+      status: String(agent.status),
+      shared: agent.shared,
+      node: agent.node
+        ? {
+            id: agent.node.id,
+            name: agent.node.name,
+            status: String(agent.node.status),
+          }
+        : null,
+      owner: agent.user?.username ?? null,
+      address: agent.user?.username
+        ? `${agent.user.username}/${agent.slug}`
+        : agent.slug,
+    }));
+  }
+
+  const own = ownAgents.map((agent) => ({
+    id: agent.id,
+    slug: agent.slug,
+    name: agent.name,
+    description: agent.description,
+    type: String(agent.type),
+    status: String(agent.status),
+    shared: agent.shared,
+    node: agent.node
+      ? {
+          id: agent.node.id,
+          name: agent.node.name,
+          status: String(agent.node.status),
+        }
+      : null,
+    owner: null,
+    address: agent.slug,
+  }));
+
+  return createResponseFrame(
+    "agent.list",
+    { own, shared: sharedAgents },
+    frame.id,
+  );
 }
 
 // ─── Message Routing ──────────────────────────────────────────────────────────
