@@ -20,6 +20,7 @@
     "@myagents/api": "workspace:*",
     "@myagents/auth": "workspace:*",
     "@myagents/env": "workspace:*",
+    "@myagents/shared": "workspace:*",
     "@myagents/ui": "workspace:*",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-form": "^1.28.0",

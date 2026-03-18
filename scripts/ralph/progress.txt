@@ -26,6 +26,11 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
 - In JSX with `Record<string, unknown>` data: use `String(val)` not `val as string`, and use ternary `val ? <JSX/> : null` instead of `val && <JSX/>`
 - Use `select` over `include` in Prisma queries within oRPC routes to control return shape and prevent type leakage
 - Compound unique constraints can be used for lookups: `prisma.agent.findUnique({ where: { userId_slug: { userId, slug } } })`
+- oRPC `queryOptions` for procedures with required input needs `{ input: { ... } }` wrapping; optional input procedures can pass input directly
+- When converting a leaf route to a layout route (e.g., `agents.tsx` → layout with `<Outlet />`), move the page content to `agents/index.tsx` and create child routes as `agents/$param.tsx`
+- Cast oRPC response data to `Record<string, unknown>` in UI components when the inferred return type is narrow — access fields via `String(data.field)` pattern
+- WebSocket client hook: `useWebSocket()` in `apps/web/src/hooks/use-websocket.ts` — provides `sendFrame(method, payload)`, `subscribe(handler)`, `connected` state; auto-reconnects
+- WebSocket URL: replace `http` with `ws` in `VITE_SERVER_URL` + `/ws`; auth via session cookie (no explicit auth needed)
 ---
 
 ## 2026-03-18 - US-001
@@ -280,4 +285,50 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - Agent cards link to detail page (US-016) — using plain div for now since `/_auth/agents/$slug` route doesn't exist yet
   - No Badge or Select components exist in `packages/ui/` — used native `<select>` for filters and inline styled spans for badges
   - Referenced solved problem `ui/shadcn/dashboard-conventions` for skeleton loading patterns and layout conventions
+---
+
+## 2026-03-18 - US-016
+- Added agent detail page UI at `/_auth/agents/$slug` route
+- Header with agent name, type badge (hermes/openclaw/custom), online/offline status indicator, node info, description
+- Conversations tab: list of conversations sorted by recency with last message preview and relative timestamps, New Conversation button
+- Settings tab (own agents only): edit form for display name and description with save/status feedback
+- Error state for agent not found / no access
+- Loading skeleton matching final layout shape
+- Converted `agents.tsx` from leaf route to layout route with `<Outlet />`, moved list page to `agents/index.tsx`
+- Updated agent cards in list page to link to detail page using `<Link to="/agents/$slug">`
+- Files changed: `apps/web/src/routes/_auth/agents.tsx` (converted to layout), `apps/web/src/routes/_auth/agents/index.tsx` (new, list page), `apps/web/src/routes/_auth/agents/$slug.tsx` (new, detail page), `apps/web/src/routeTree.gen.ts` (regenerated)
+- **Learnings for future iterations:**
+  - oRPC `queryOptions` for procedures with required input needs `{ input: { slug } }` wrapping — procedures with optional input (like agents.list) can pass input directly
+  - `serializeAgent` return type only preserves explicitly overwritten fields (`type`, `status`, `node`) — cast to `Record<string, unknown>` to access other fields like `name`, `description`, `id`
+  - Converting a leaf route to a layout: rename component to `*Layout`, add `<Outlet />`, move content to `index.tsx` in a same-named directory
+  - `@tanstack/router-cli generate` works for regenerating route tree (runs from workspace root)
+  - Agent cards now use `<Link>` component from TanStack Router for navigation to detail pages
+---
+
+## 2026-03-18 - US-017
+- Added conversation view chat UI at `/_auth/agents/$slug/conversations/$id`
+- Chat interface with message bubbles: user messages right-aligned (primary color), agent messages left-aligned (muted bg)
+- Message input area with auto-resizing textarea and send button, Enter to send (Shift+Enter for newline)
+- Conversation title display in header with back navigation to agent detail page
+- Loads message history on mount via `messages.list` oRPC route with cursor-based pagination (scroll up for more)
+- Sends messages via WebSocket `message.send` frame with optimistic UI (user message appears immediately)
+- Typing indicator (bouncing dots) while waiting for agent response
+- Handles `message.done` and `message.chunk` WebSocket events for real-time agent responses
+- Created `useWebSocket` hook in `apps/web/src/hooks/use-websocket.ts`:
+  - Connects to server WebSocket at `/ws` using session cookie auth
+  - Provides `sendFrame`, `subscribe`, `connected` state
+  - Auto-reconnects on drop with 3s delay
+- Converted `$slug.tsx` to layout route, moved detail page to `$slug/index.tsx`
+- Updated conversation list items to link to conversation view
+- New Conversation button now navigates to the new conversation's chat view
+- Added `@myagents/shared` as dependency to web app for frame types
+- Files changed: `apps/web/src/hooks/use-websocket.ts` (new), `apps/web/src/routes/_auth/agents/$slug.tsx` (converted to layout), `apps/web/src/routes/_auth/agents/$slug/index.tsx` (new, moved from $slug.tsx), `apps/web/src/routes/_auth/agents/$slug/conversations/$id.tsx` (new), `apps/web/package.json` (modified), `apps/web/src/routeTree.gen.ts` (regenerated)
+- **Learnings for future iterations:**
+  - WebSocket client URL: replace `http` with `ws` in `VITE_SERVER_URL`, append `/ws` — server authenticates client connections via session cookie
+  - `useWebSocket` hook uses a subscribe pattern (Set of handlers) — components register listeners for specific frame methods
+  - Optimistic message sending: add user message to local state immediately, set `sending` flag, clear on `message.done`
+  - For nested routes under a dynamic segment (e.g., `$slug/conversations/$id`), create a directory matching the segment name and add child routes inside
+  - `npx @tanstack/router-cli generate` run from `apps/web/` directory works to regenerate route tree (or use `npx vite build` which also triggers the plugin)
+  - Message list from oRPC returns desc order — reverse for display (oldest first at top)
+  - Full-height chat layout uses `h-[calc(100vh-4rem)]` with `flex flex-col` and `flex-1 overflow-y-auto` for the messages area
 ---

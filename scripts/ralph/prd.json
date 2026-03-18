@@ -259,7 +259,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "Uses agent.get and conversation.list oRPC routes."
     },
     {
@@ -277,7 +277,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "Core chat experience. Follow mobile-first PWA patterns from AGENTS.md."
     },
     {

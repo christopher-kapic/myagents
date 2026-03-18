@@ -209,6 +209,9 @@ importers:
       '@myagents/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@myagents/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@myagents/ui':
         specifier: workspace:*
         version: link:../../packages/ui
