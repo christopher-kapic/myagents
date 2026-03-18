@@ -1,0 +1,49 @@
+enum NodeStatus {
+  online
+  offline
+}
+
+enum AgentStatus {
+  online
+  offline
+}
+
+enum AgentType {
+  hermes
+  openclaw
+  custom
+}
+
+model Node {
+  id       String     @id @default(cuid(2))
+  name     String
+  userId   String
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastSeen DateTime   @default(now())
+  status   NodeStatus @default(offline)
+  agents   Agent[]
+
+  @@index([userId])
+  @@map("node")
+}
+
+model Agent {
+  id            String      @id @default(cuid(2))
+  slug          String
+  name          String
+  description   String?
+  type          AgentType   @default(custom)
+  nodeId        String
+  node          Node        @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status        AgentStatus @default(offline)
+  adapterConfig Json?
+  shared        Boolean     @default(false)
+
+  @@unique([userId, slug])
+  @@index([nodeId])
+  @@index([slug])
+  @@index([userId])
+  @@map("agent")
+}

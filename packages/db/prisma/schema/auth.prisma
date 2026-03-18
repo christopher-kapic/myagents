@@ -15,6 +15,8 @@ model User {
   accounts         Account[]
   twoFactors       TwoFactor[]
   pushSubscriptions PushSubscription[]
+  nodes             Node[]
+  agents            Agent[]
 
   @@unique([email])
   @@map("user")
