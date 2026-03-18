@@ -33,6 +33,9 @@ yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
 
+# TanStack Router auto-generated route files
+apps/web/src/routes/**/*.js
+
 # Turbo
 .turbo
 .nx
