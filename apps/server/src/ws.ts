@@ -136,8 +136,10 @@ export async function authenticateWebSocket(
   const url = new URL(req.url, "http://localhost");
   const params = url.searchParams;
 
+  const connType = params.get("type");
+
   // Node (CLI) connection: ?type=node&apiKey=...&nodeId=...
-  if (params.get("type") === "node") {
+  if (connType === "node") {
     const apiKey = params.get("apiKey");
     const nodeId = params.get("nodeId");
     if (!apiKey || !nodeId) return null;
@@ -168,6 +170,17 @@ export async function authenticateWebSocket(
     }
 
     return { type: "node", userId: result.userId, nodeId };
+  }
+
+  // Client connection via API key: ?type=client&apiKey=...
+  if (connType === "client") {
+    const apiKey = params.get("apiKey");
+    if (!apiKey) return null;
+
+    const result = await authenticateApiKey(apiKey);
+    if (!result) return null;
+
+    return { type: "client", userId: result.userId };
   }
 
   // Client (web app) connection: authenticated via session cookie

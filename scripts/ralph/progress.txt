@@ -31,6 +31,13 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
 - Cast oRPC response data to `Record<string, unknown>` in UI components when the inferred return type is narrow — access fields via `String(data.field)` pattern
 - WebSocket client hook: `useWebSocket()` in `apps/web/src/hooks/use-websocket.ts` — provides `sendFrame(method, payload)`, `subscribe(handler)`, `connected` state; auto-reconnects
 - WebSocket URL: replace `http` with `ws` in `VITE_SERVER_URL` + `/ws`; auth via session cookie (no explicit auth needed)
+- TanStack Router has no `useOutletContext` — use React context to pass state from layout routes to children
+- To regenerate `routeTree.gen.ts`: run `npx vite build` from `apps/web/` (router plugin triggers during build)
+- `.js` build artifacts in `apps/web/src/` conflict with `.tsx` source files for route generation — delete `.js` files before regenerating route tree
+- Bottom nav items in `apps/web/src/components/bottom-nav.tsx` — add `{ to, label, icon }` entries to `navItems` array
+- API key auth for HTTP: `packages/api/src/context.ts` supports `Authorization: Bearer <key>` header as alternative to session cookies — CLI clients use this
+- WebSocket supports client connections with API key: `?type=client&apiKey=...` query params
+- oRPC HTTP wire format: POST to `/rpc/<router>/<procedure>` with JSON body
 ---
 
 ## 2026-03-18 - US-001
@@ -331,4 +338,125 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - `npx @tanstack/router-cli generate` run from `apps/web/` directory works to regenerate route tree (or use `npx vite build` which also triggers the plugin)
   - Message list from oRPC returns desc order — reverse for display (oldest first at top)
   - Full-height chat layout uses `h-[calc(100vh-4rem)]` with `flex flex-col` and `flex-1 overflow-y-auto` for the messages area
+---
+
+## 2026-03-18 - US-018
+- Implemented real-time streaming in conversation view
+- Fixed `message.done` handler to finalize pending streaming message instead of adding a duplicate
+- Added `message.chunk` scroll-to-bottom during streaming via `requestAnimationFrame`
+- Added error handling for `message.send` response errors (agent offline, not found)
+- Added error handling for `message.response` errors mid-stream (appends error to pending message)
+- Added `error` flag to `ChatMessage` interface with visual error state in message bubbles (destructive color, border)
+- Typing indicator (bouncing dots) correctly hides when first streaming chunk arrives (existing `pending` check works)
+- Files changed: `apps/web/src/routes/_auth/agents/$slug/conversations/$id.tsx` (modified)
+- **Learnings for future iterations:**
+  - `Frame` type from `@myagents/shared` has `type` ('req'/'res'/'event') and `error` (optional string) fields — use `frame.type === 'res' && frame.error` to detect error responses
+  - `requestAnimationFrame` before `scrollIntoView` ensures DOM has updated with the new chunk content before scrolling
+  - When finalizing a streaming message on `message.done`, replace the pending message's content with the server's authoritative `content` and set `pending: false`
+  - Error states in message bubbles use `bg-destructive/10` with `border-destructive/20` for visual distinction
+---
+
+## 2026-03-18 - US-019
+- Added conversation list sidebar with desktop sidebar + mobile drawer pattern
+- Created `apps/web/src/routes/_auth/agents/$slug/conversations.tsx` as a layout route wrapping conversation child routes
+- Desktop: persistent 72/80-width sidebar with conversation list, active conversation highlighted, new conversation button, back to agent link
+- Mobile: Sheet component (side="left") triggered by PanelLeft icon button in conversation header
+- React context (`ConversationSidebarContext`) shares `openDrawer` callback from layout to child routes
+- Updated conversation page (`$id.tsx`): mobile shows drawer toggle, desktop shows back arrow; height changed from `h-[calc(100vh-4rem)]` to `h-full` since parent layout sets height
+- Error state for conversation not found simplified to fit within sidebar layout
+- Files changed: `apps/web/src/routes/_auth/agents/$slug/conversations.tsx` (new), `apps/web/src/routes/_auth/agents/$slug/conversations/$id.tsx` (modified), `apps/web/src/routeTree.gen.ts` (regenerated)
+- **Learnings for future iterations:**
+  - TanStack Router does NOT have `useOutletContext` like React Router — use React context for passing state from layout to child routes
+  - To regenerate `routeTree.gen.ts`, run `npx vite build` from `apps/web/` (the router plugin runs during vite build); `@tanstack/router-cli generate` only works if `@tanstack/router-cli` is installed
+  - Adding a layout route (e.g., `conversations.tsx`) at a path level automatically wraps all child routes under that path — the `$id.tsx` route becomes a child of the conversations layout
+  - Sheet component with `side="left"` and `showCloseButton={false}` works well as a mobile navigation drawer
+  - When a child route is wrapped by a new layout that sets overall height, change child from explicit viewport height to `h-full`
+  - `useParams({ strict: false })` allows accessing params from any ancestor route (used for getting `$id` from nested conversation routes)
+---
+
+## 2026-03-18 - US-020
+- Implemented push notifications for agent responses in `apps/server/src/ws.ts`
+- Added `sendAgentResponsePush()` function that fires on `message.done` (fire-and-forget, best-effort)
+- Queries user's push subscriptions, sends notification with agent name as title, message preview (120 char) as body
+- Notification URL points to `/agents/{slug}/conversations/{id}` so tapping opens the conversation
+- Handles expired/invalid subscriptions (410/404) by auto-deleting from DB
+- Updated service worker (`apps/web/src/sw.ts`) to use `conversationId` as notification tag so notifications from the same conversation replace each other
+- Files changed: `apps/server/src/ws.ts` (modified), `apps/web/src/sw.ts` (modified)
+- **Learnings for future iterations:**
+  - `@myagents/api/lib/web-push` is importable from the server thanks to the `"./*"` export pattern in `@myagents/api/package.json`
+  - Push notifications should be fire-and-forget (void + try/catch) to never break the message flow
+  - Using `conversationId` as the notification tag prevents notification spam from the same conversation
+  - The existing push infrastructure (service worker, subscription management, VAPID keys) was already complete — only needed server-side triggering logic
+  - Referenced solved problem `pwa-push-notifications` for patterns
+---
+
+## 2026-03-18 - US-021
+- Added Agents and Conversations tabs to bottom navigation (`apps/web/src/components/bottom-nav.tsx`)
+- Created `conversations.listAll` oRPC route in `packages/api/src/routers/conversations.ts` — returns recent conversations across all agents for a user with cursor-based pagination, including agent metadata and last message preview
+- Created `/_auth/conversations` page (`apps/web/src/routes/_auth/conversations.tsx`) — shows all recent conversations across all agents, each linking to the conversation view under the correct agent slug
+- Bottom nav now has 4 items: Dashboard, Agents, Chats, Settings
+- Responsive layout already handled by existing patterns: single column mobile (bottom nav), sidebar + content on desktop (in conversation views)
+- Safe area handling already in place via CSS variables in `__root.tsx`
+- Files changed: `apps/web/src/components/bottom-nav.tsx` (modified), `packages/api/src/routers/conversations.ts` (modified), `apps/web/src/routes/_auth/conversations.tsx` (new), `apps/web/src/routeTree.gen.ts` (regenerated)
+- **Learnings for future iterations:**
+  - `.js` build artifacts in `apps/web/src/` cause TanStack Router route conflicts — must delete them before regenerating `routeTree.gen.ts` (the vite plugin sees both `.js` and `.tsx` as conflicting routes)
+  - `timeout 10 npx vite --host` is a reliable way to trigger route tree generation when `@tanstack/router-cli generate` fails to produce output
+  - Bottom nav is in `apps/web/src/components/bottom-nav.tsx` — simple array of `{ to, label, icon }` objects
+  - `Link` component's `activeProps` in TanStack Router replaces the entire className (not appending), so both base and active classes must include common styles
+---
+
+## 2026-03-18 - US-022
+- Created template interpolation system in `apps/cli/src/template.ts`
+- `interpolateTemplate()` replaces `{{message}}`, `{{historyFile}}`, `{{conversationId}}`, `{{agentSlug}}` in command strings
+- `writeHistoryFile()` writes conversation history to a temp file (`/tmp/myagents/history-<conversationId>.json`) for agents that need it
+- `buildTemplateVariables()` convenience function to construct all variables for a command invocation
+- Custom agent YAML parsing was already implemented in US-012 (`scanner.ts`) — adapter config fields (command, shell, streaming, timeout) already parsed correctly
+- Custom agent registration alongside auto-detected agents was already handled in US-012 (`connect.ts`)
+- Files changed: `apps/cli/src/template.ts` (new)
+- **Learnings for future iterations:**
+  - US-022 was mostly already implemented by US-012 (scanner + registration) — the missing piece was the template variable interpolation utility
+  - Template uses simple `{{var}}` regex replacement — no Handlebars dependency needed
+  - History file is written to OS temp dir (`os.tmpdir()`) to avoid cluttering the user's home directory
+  - The `interpolateTemplate` function leaves unknown `{{var}}` patterns untouched — safe for commands that use curly braces for other purposes
+  - US-023 (custom adapter) will use `template.ts` utilities to actually execute custom agent commands
+---
+
+## 2026-03-18 - US-023
+- Implemented CustomAdapter in `apps/cli/src/adapters/custom.ts` implementing AgentAdapter interface
+- Two modes: streaming (readline line-by-line stdout) and batch (wait for exit, return full stdout)
+- Shell-escapes `{{message}}` via single-quote wrapping with embedded quote escaping
+- Passes raw message via `MYAGENTS_MESSAGE` env var (plus `MYAGENTS_CONVERSATION_ID`, `MYAGENTS_AGENT_SLUG`, `MYAGENTS_HISTORY_FILE`)
+- Uses `template.ts` utilities (`interpolateTemplate`, `buildTemplateVariables`) for command interpolation
+- Handles timeout (configurable, default 120s), non-zero exit codes (includes stderr in error), ENOENT (command not found)
+- Shell mode defaults to `true` to support piping/redirection in custom commands
+- Updated `adapter-registry.ts` to instantiate CustomAdapter for `custom` type agents (validates `command` is present)
+- Updated `adapters/index.ts` to export CustomAdapter
+- Files changed: `apps/cli/src/adapters/custom.ts` (new), `apps/cli/src/adapter-registry.ts` (modified), `apps/cli/src/adapters/index.ts` (modified)
+- **Learnings for future iterations:**
+  - Shell escaping for single-quote wrapping: replace `'` with `'\''` (close quote, escaped literal quote, reopen quote)
+  - `readline.createInterface` with `proc.stdout` gives async iteration over lines — good for streaming subprocess output
+  - `spawn()` with `shell: true` uses `/bin/sh -c` on Unix — necessary for custom commands that use pipes, redirection, etc.
+  - Custom adapters generate a random `conversationId` per call since the AgentAdapter interface doesn't pass it — env vars provide the primary communication channel for context
+  - The adapter registry validates that custom agents have a `command` configured before creating an adapter — logs a warning and returns null if missing
+---
+
+## 2026-03-18 - US-024
+- Added CLI agent subcommands: `agent list`, `agent send`, `agent add`, `agent remove`
+- `agent list`: calls server oRPC API via HTTP with API key auth (Bearer token), displays agents in table format with columns SLUG/NAME/TYPE/STATUS/NODE
+- `agent send <slug> <message>`: connects via WebSocket as a client with API key auth, sends `message.send` frame, streams chunks to stdout, prints final response
+- `agent add`: interactive wizard (readline) prompting for slug, name, description, command, streaming, timeout — writes entry to `~/.myagents/agents.yaml`
+- `agent remove <slug>`: removes from `~/.myagents/agents.yaml` + calls server API to unregister (best-effort)
+- Added API key auth to oRPC HTTP context (`packages/api/src/context.ts`) — checks `Authorization: Bearer <key>` header, validates via SHA-256 hash lookup, builds session-compatible object
+- Extended WebSocket auth (`apps/server/src/ws.ts`) to support `?type=client&apiKey=...` for CLI client connections
+- Created `apps/cli/src/api-client.ts` — simple HTTP client wrapping fetch with API key Bearer auth for oRPC `/rpc/` calls
+- Files changed: `apps/cli/src/commands/agent.ts` (new), `apps/cli/src/api-client.ts` (new), `apps/cli/src/index.ts` (modified), `packages/api/src/context.ts` (modified), `apps/server/src/ws.ts` (modified)
+- **Learnings for future iterations:**
+  - oRPC RPC wire format: POST to `/rpc/<router>/<procedure>` with JSON body (input), returns JSON response
+  - API key auth for HTTP endpoints: use `Authorization: Bearer <key>` header, look up SHA-256 hash in ApiKey table
+  - To make API key auth type-compatible with Better Auth's session, build a full session-shaped object using `as SessionResult` cast — the user record from Prisma matches Better Auth's user shape
+  - WebSocket client connections with API key: use `?type=client&apiKey=...` query params (same pattern as node auth but without nodeId)
+  - The `web-push` type error in server is pre-existing and non-blocking — it doesn't affect CLI or API package typecheck
+  - Commander supports nested subcommands via `new Command("parent").addCommand(child)` pattern
+  - For interactive CLI prompts, use `node:readline` `createInterface` with promise wrapper around `rl.question`
+  - Simple YAML writing: build YAML strings manually for flat structures with one level of nesting — no YAML library needed
 ---

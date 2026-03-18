@@ -294,7 +294,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-017 for conversation view and US-010 for message routing."
     },
     {
@@ -311,7 +311,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-017. Responsive: sidebar on desktop, drawer on mobile."
     },
     {
@@ -326,7 +326,7 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "Leverage existing push notification setup. Check how push is currently implemented."
     },
     {
@@ -342,7 +342,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": "Follow existing BottomNav patterns from AGENTS.md."
     },
     {
@@ -357,7 +357,7 @@
         "Typecheck passes"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-011. Simple {{var}} interpolation, no Handlebars dependency."
     },
     {
@@ -374,7 +374,7 @@
         "Typecheck passes"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": "Security-critical: shell escaping is essential. Depends on US-022."
     },
     {
@@ -389,7 +389,7 @@
         "Typecheck passes"
       ],
       "priority": 24,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-011. agent list respects permissions (server-side filtering)."
     },
     {
