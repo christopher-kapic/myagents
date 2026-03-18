@@ -705,3 +705,17 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - WebSocket layer doesn't need admin bypass — admin management happens via oRPC routes, not real-time WS
   - The pre-existing `web-push` type error is non-blocking and should be ignored in CI checks
 ---
+
+## 2026-03-18 - US-039
+- Added `myagents status` command: shows server connectivity, node ID, and all agents with online/offline status indicators
+- Added `myagents logs` command: view last N lines, follow mode (-f), clear, and view all rotated log files
+- Added `myagents config` command: get/set/list/unset config values (apiKey, serverUrl, nodeId) with API key masking
+- Added `logger.ts` utility: logs to `~/.myagents/logs/myagents.log` with 5MB rotation and 5 file retention
+- Integrated logging into the `connect` command (connection events, agent registration, message processing, errors)
+- Files changed: `apps/cli/src/commands/status.ts` (new), `apps/cli/src/commands/logs.ts` (new), `apps/cli/src/commands/config-cmd.ts` (new), `apps/cli/src/logger.ts` (new), `apps/cli/src/index.ts` (modified), `apps/cli/src/commands/connect.ts` (modified)
+- **Learnings for future iterations:**
+  - CLI commands follow pattern: export a `Command` from `commands/<name>.ts`, register via `program.addCommand()` in `index.ts`
+  - Config file is at `~/.myagents/config.json`, logs at `~/.myagents/logs/` — both use `getConfigDir()` as base
+  - Use `watchFile` with interval for simple log following (no chokidar dependency needed)
+  - API key values should be masked in CLI output (show first 4 + last 4 chars)
+---
