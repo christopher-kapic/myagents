@@ -1,7 +1,9 @@
+import { Input } from "@myagents/ui/components/input";
 import { Skeleton } from "@myagents/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { Bot, MessageSquare } from "lucide-react";
+import { Bot, MessageSquare, Search, X } from "lucide-react";
+import { useState } from "react";
 
 import { orpc } from "@/utils/orpc";
 
@@ -10,13 +12,45 @@ export const Route = createFileRoute("/_auth/conversations")({
 });
 
 function ConversationsPage() {
+  const [search, setSearch] = useState("");
+  const [agentFilter, setAgentFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const isSearching = search.trim().length > 0;
+
   const conversationsQuery = useQuery(
     orpc.conversations.listAll.queryOptions(),
   );
 
+  const searchQuery = useQuery({
+    ...orpc.conversations.search.queryOptions({
+      input: {
+        query: search.trim(),
+        agentId: agentFilter || undefined,
+        dateFrom: dateFrom ? new Date(dateFrom).toISOString() : undefined,
+        dateTo: dateTo
+          ? new Date(dateTo + "T23:59:59").toISOString()
+          : undefined,
+      },
+    }),
+    enabled: isSearching,
+  });
+
+  const agentsQuery = useQuery(orpc.agents.list.queryOptions());
+
   const conversations = (conversationsQuery.data?.items ?? []) as Array<
     Record<string, unknown>
   >;
+
+  const searchResults = (searchQuery.data?.items ?? []) as Array<
+    Record<string, unknown>
+  >;
+
+  const agents = [
+    ...((agentsQuery.data?.own ?? []) as Array<Record<string, unknown>>),
+    ...((agentsQuery.data?.shared ?? []) as Array<Record<string, unknown>>),
+  ];
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -27,14 +61,67 @@ function ConversationsPage() {
         </p>
       </div>
 
-      {conversationsQuery.isLoading ? (
+      <div className="flex flex-wrap items-center gap-2 mb-6">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search messages..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+          {isSearching ? (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
+        <select
+          value={agentFilter}
+          onChange={(e) => setAgentFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+        >
+          <option value="">All agents</option>
+          {agents.map((agent) => (
+            <option key={String(agent.id)} value={String(agent.id)}>
+              {String(agent.name)}
+            </option>
+          ))}
+        </select>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => setDateFrom(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          placeholder="From"
+        />
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => setDateTo(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+          placeholder="To"
+        />
+      </div>
+
+      {isSearching ? (
+        <SearchResults
+          results={searchResults}
+          isLoading={searchQuery.isLoading}
+          query={search.trim()}
+        />
+      ) : conversationsQuery.isLoading ? (
         <ConversationsSkeleton />
       ) : conversations.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium mb-1">No conversations yet</h3>
           <p className="text-sm text-muted-foreground max-w-sm">
-            Start a conversation from an agent's detail page
+            Start a conversation from an agent&apos;s detail page
           </p>
         </div>
       ) : (
@@ -82,7 +169,9 @@ function ConversationsPage() {
                     {lastMessage ? (
                       <span className="text-xs text-muted-foreground truncate">
                         &middot;{" "}
-                        {lastMessage.senderType === "user" ? "You: " : "Agent: "}
+                        {lastMessage.senderType === "user"
+                          ? "You: "
+                          : "Agent: "}
                         {String(lastMessage.content)}
                       </span>
                     ) : null}
@@ -94,6 +183,116 @@ function ConversationsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function SearchResults({
+  results,
+  isLoading,
+  query,
+}: {
+  results: Array<Record<string, unknown>>;
+  isLoading: boolean;
+  query: string;
+}) {
+  if (isLoading) {
+    return <ConversationsSkeleton />;
+  }
+
+  if (results.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 text-center">
+        <Search className="h-12 w-12 text-muted-foreground mb-4" />
+        <h3 className="text-lg font-medium mb-1">No results found</h3>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          No messages matching &ldquo;{query}&rdquo;
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <p className="text-sm text-muted-foreground mb-3">
+        {results.length} result{results.length === 1 ? "" : "s"} for &ldquo;
+        {query}&rdquo;
+      </p>
+      {results.map((result) => {
+        const createdAt = result.createdAt
+          ? new Date(String(result.createdAt))
+          : null;
+        const agentSlug = String(result.agentSlug);
+
+        return (
+          <Link
+            key={String(result.id)}
+            to="/agents/$slug/conversations/$id"
+            params={{
+              slug: agentSlug,
+              id: String(result.conversationId),
+            }}
+            className="flex items-center gap-3 rounded-lg border p-4 transition-colors hover:bg-accent/50"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted shrink-0">
+              <Bot className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium truncate">
+                  {result.conversationTitle
+                    ? String(result.conversationTitle)
+                    : "Untitled conversation"}
+                </p>
+                {createdAt ? (
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {formatRelativeTime(createdAt)}
+                  </span>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-xs text-muted-foreground font-mono">
+                  {String(result.agentName)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  &middot;{" "}
+                  {result.senderType === "user" ? "You" : "Agent"}
+                </span>
+              </div>
+              <p className="text-sm mt-1 text-muted-foreground line-clamp-2">
+                <HighlightedText
+                  text={String(result.content)}
+                  query={query}
+                />
+              </p>
+            </div>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+function HighlightedText({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>;
+
+  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${escapedQuery})`, "gi"));
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === query.toLowerCase() ? (
+          <mark
+            key={i}
+            className="bg-yellow-200 dark:bg-yellow-900/50 text-foreground rounded-sm px-0.5"
+          >
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        ),
+      )}
+    </>
   );
 }
 
