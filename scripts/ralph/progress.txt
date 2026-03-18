@@ -651,3 +651,26 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - Agent filter dropdown populated by reusing `orpc.agents.list` query — agents are available across the page
   - Manual browser verification needed (no dev-browser skill available)
 ---
+
+## 2026-03-18 - US-036
+- Implemented agent health monitoring dashboard with uptime tracking, push notifications, and dashboard UI widget
+- Added `AgentUptimeLog` model to `packages/db/prisma/schema/agents.prisma` to persist online/offline status transitions with timestamps
+- Created `packages/api/src/routers/health.ts` with `overview` (all agents health + summary stats) and `agentDetail` (individual agent health + status history) oRPC routes
+- Registered health router in `packages/api/src/routers/index.ts`
+- Modified `apps/server/src/ws.ts`:
+  - `handleNodeDisconnect()` now logs offline transitions to AgentUptimeLog and sends push notifications for affected agents
+  - `handleAgentRegister()` now logs online transitions to AgentUptimeLog
+  - Added `sendAgentOfflinePush()` function for offline agent push notifications
+- Rewrote `apps/web/src/routes/_auth/dashboard.tsx` with AgentHealthWidget showing:
+  - Summary cards (total, online, offline counts, avg 24h uptime)
+  - Agent status list with type badges, last seen timestamps, 24h uptime percentages, online/offline indicators
+  - Links to agent detail pages
+  - Proper skeleton loading states and empty state
+- Files changed: `packages/db/prisma/schema/agents.prisma`, `packages/api/src/routers/health.ts` (new), `packages/api/src/routers/index.ts`, `apps/server/src/ws.ts`, `apps/web/src/routes/_auth/dashboard.tsx`
+- **Learnings for future iterations:**
+  - Uptime calculation uses a time-interval approach: walk through AgentUptimeLog entries between start/end dates, summing online durations
+  - The `calculateUptimePercent()` function handles edge cases: no logs (use current status), starting status before period (fetch last log before window)
+  - AgentUptimeLog uses compound index `[agentId, timestamp]` for efficient time-range queries
+  - Push notification for offline agents follows the same pattern as `sendAgentResponsePush` — fire-and-forget with best-effort delivery
+  - Manual browser verification needed (no dev-browser skill available)
+---
