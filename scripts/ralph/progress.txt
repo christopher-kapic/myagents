@@ -636,3 +636,18 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - The `use-voice-recording` hook now exposes `engine`, `setEngine`, `suggestWebSpeech`, and `dismissSuggestion` for UI integration
   - For audio level visualization with Web Speech API, still capture mic via `getUserMedia` separately since SpeechRecognition handles its own audio stream
 ---
+
+## 2026-03-18 - US-035
+- Added `conversations.search` oRPC route with full-text search across message content using Prisma `contains` with case-insensitive mode
+- Search supports filtering by agentId, dateFrom, dateTo with cursor-based pagination
+- Updated conversations page (`apps/web/src/routes/_auth/conversations.tsx`) with search bar, agent filter dropdown, date range inputs
+- Search results show message previews with highlighted matching terms using a `HighlightedText` component
+- Clicking a result navigates to the conversation via existing `/agents/$slug/conversations/$id` route
+- Files changed: `packages/api/src/routers/conversations.ts`, `apps/web/src/routes/_auth/conversations.tsx`
+- **Learnings for future iterations:**
+  - The `conversations.search` route searches Message.content using Prisma `contains` + `mode: "insensitive"` — same pattern as agent search
+  - Search results include conversation and agent context via nested Prisma `select` on the Message query
+  - The search UI conditionally renders search results vs. the regular conversation list based on whether search input is non-empty
+  - Agent filter dropdown populated by reusing `orpc.agents.list` query — agents are available across the page
+  - Manual browser verification needed (no dev-browser skill available)
+---

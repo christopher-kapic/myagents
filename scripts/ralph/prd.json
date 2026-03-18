@@ -577,7 +577,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 35,
-      "passes": false,
+      "passes": true,
       "notes": "Add oRPC route for search. Consider Prisma full-text search or LIKE queries."
     },
     {
