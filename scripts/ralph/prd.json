@@ -493,7 +493,7 @@
         "Typecheck passes"
       ],
       "priority": 30,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-024 for CLI agent commands."
     },
     {

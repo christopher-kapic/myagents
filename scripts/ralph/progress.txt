@@ -550,3 +550,17 @@ Started: Wed Mar 18 04:41:23 AM UTC 2026
   - The permissions.list route returns `canSendTo` and `canReceiveFrom` arrays — each contains the full agent info with userId and username for display
   - Deleted stale `.js` build artifact (`$slug/index.js`) that could conflict with `.tsx` source
 ---
+
+## 2026-03-18 - US-030
+- Added `--as <slug>` flag to `myagents agent send` command for agent-to-agent identity
+- `MYAGENTS_AGENT_SLUG` env var is read as fallback when `--as` is not specified
+- When sending via WebSocket, `senderAgent` field is included in the message.send frame payload if identity is available
+- Cross-user agent addressing: `username/slug` format sets `targetAgent` field in the frame
+- HermesAdapter and OpenClawAdapter now accept `agentSlug` parameter and set `MYAGENTS_AGENT_SLUG` env var when spawning subprocess
+- Adapter registry updated to pass `agent.slug` to all adapter constructors
+- Files changed: `apps/cli/src/commands/agent.ts`, `apps/cli/src/adapters/hermes.ts`, `apps/cli/src/adapters/openclaw.ts`, `apps/cli/src/adapter-registry.ts`
+- **Learnings for future iterations:**
+  - CustomAdapter already set MYAGENTS_AGENT_SLUG — Hermes and OpenClaw needed the same treatment for consistency
+  - The `senderAgent` and `targetAgent` fields in the message.send frame payload are already expected by the server's WebSocket handler (resolveTargetAgent in ws.ts)
+  - Cross-user agent addressing uses `username/slug` format, same pattern used in both CLI and web UI
+---
