@@ -1,6 +1,7 @@
 import type { DetectedAgent } from "./scanner.js";
 import type { AgentAdapter } from "./adapters/types.js";
 import { HermesAdapter } from "./adapters/hermes.js";
+import { OpenClawAdapter } from "./adapters/openclaw.js";
 
 /**
  * Create the appropriate adapter for a detected agent based on its type.
@@ -17,8 +18,11 @@ export function createAdapter(agent: DetectedAgent): AgentAdapter | null {
         toolsets: config.toolsets as string[] | undefined,
       });
     case "openclaw":
-      // OpenClaw adapter will be implemented in US-014
-      return null;
+      return new OpenClawAdapter({
+        binaryPath: config.binaryPath as string | undefined,
+        configPath: config.configPath as string | undefined,
+        gatewayUrl: config.gatewayUrl as string | undefined,
+      });
     case "custom":
       // Custom adapter will be implemented in US-023
       return null;
