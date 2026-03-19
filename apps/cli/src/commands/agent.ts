@@ -10,6 +10,7 @@ import {
   createRequestFrame,
 } from "@myagents/shared";
 import { ApiClient } from "../api-client.js";
+import { updateAgentConfig } from "../agent-config.js";
 import { resolveApiKey, resolveServerUrl } from "../config.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -295,9 +296,9 @@ agentCommand
       console.log(`Renamed "${oldSlug}" → "${newSlug}" on server.`);
 
       // Update local agents.yaml if the agent is defined there
-      const updated = renameAgentInYaml(oldSlug, newSlug);
-      if (updated) {
-        console.log(`Updated slug in ~/.myagents/agents.yaml`);
+      const changes = updateAgentConfig(oldSlug, { newSlug });
+      if (changes.length > 0) {
+        console.log(`Updated local config: ${changes.join(", ")}`);
       }
     } catch (err) {
       console.error(`Error: ${err instanceof Error ? err.message : err}`);
@@ -532,28 +533,6 @@ function quoteIfNeeded(s: string): string {
     return `"${s.replace(/"/g, '\\"')}"`;
   }
   return s;
-}
-
-/**
- * Rename an agent's slug in ~/.myagents/agents.yaml.
- * Returns true if the agent was found and renamed.
- */
-function renameAgentInYaml(oldSlug: string, newSlug: string): boolean {
-  if (!existsSync(AGENTS_YAML_PATH)) return false;
-
-  const content = readFileSync(AGENTS_YAML_PATH, "utf-8");
-
-  // Match slug lines like "  - slug: old-slug" or "  - slug: "old-slug""
-  const pattern = new RegExp(
-    `(^\\s*-\\s+slug:\\s*)"?${oldSlug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"?\\s*$`,
-    "m",
-  );
-
-  if (!pattern.test(content)) return false;
-
-  const updated = content.replace(pattern, `$1${newSlug}`);
-  writeFileSync(AGENTS_YAML_PATH, updated, "utf-8");
-  return true;
 }
 
 /**

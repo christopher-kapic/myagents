@@ -2,6 +2,7 @@ import { ORPCError } from "@orpc/server";
 import prisma from "@myagents/db";
 import { z } from "zod";
 
+import { apiEvents } from "../events";
 import { protectedProcedure } from "../index";
 
 const agentSelect = {
@@ -315,7 +316,7 @@ export const agentsRouter = {
 
       const agent = await prisma.agent.findUnique({
         where: { id: input.id },
-        select: { userId: true },
+        select: { userId: true, slug: true, nodeId: true },
       });
 
       if (!agent || (!admin && agent.userId !== userId)) {
@@ -348,6 +349,16 @@ export const agentsRouter = {
         data,
         select: agentSelect,
       });
+
+      // Notify connected CLI node of config changes so it updates locally
+      if (input.slug !== undefined && agent.nodeId) {
+        apiEvents.emitAgentConfigUpdate({
+          agentId: input.id,
+          nodeId: agent.nodeId,
+          oldSlug: agent.slug,
+          newSlug: input.slug,
+        });
+      }
 
       return serializeAgent(updated);
     }),
@@ -488,7 +499,7 @@ export const agentsRouter = {
 
       const agent = await prisma.agent.findUnique({
         where: { id: input.id },
-        select: { userId: true, adapterConfig: true },
+        select: { userId: true, slug: true, nodeId: true, adapterConfig: true },
       });
 
       if (!agent || (!admin && agent.userId !== userId)) {
@@ -505,6 +516,16 @@ export const agentsRouter = {
         },
         select: agentSelect,
       });
+
+      // Notify connected CLI node so it updates its local timeout config
+      if (agent.nodeId) {
+        apiEvents.emitAgentConfigUpdate({
+          agentId: input.id,
+          nodeId: agent.nodeId,
+          oldSlug: agent.slug,
+          timeout: input.timeout,
+        });
+      }
 
       return serializeAgent(updated);
     }),

@@ -6,6 +6,7 @@ import { createAdapter } from "../adapter-registry.js";
 import type { AgentAdapter } from "../adapters/types.js";
 import type { Frame } from "@myagents/shared";
 import { log, ensureLogsDir } from "../logger.js";
+import { updateAgentConfig } from "../agent-config.js";
 
 /** Map of agent slug → adapter instance, populated after agent detection */
 const agentAdapters = new Map<string, AgentAdapter>();
@@ -146,6 +147,30 @@ function handleFrame(frame: Frame, client: WsClient): void {
 
       // Process message asynchronously through the adapter
       void processMessage(adapter, message, conversationId ?? "", agentSlug, frame.id, client, history);
+      break;
+    }
+    case "agent.configUpdate": {
+      const payload = frame.payload as Record<string, unknown>;
+      const oldSlug = payload?.["oldSlug"] as string | undefined;
+      const newSlug = payload?.["newSlug"] as string | undefined;
+      const timeout = payload?.["timeout"] as number | undefined;
+
+      if (oldSlug) {
+        const changes = updateAgentConfig(oldSlug, { newSlug, timeout });
+        if (changes.length > 0) {
+          console.log(`Config updated for agent "${oldSlug}": ${changes.join(", ")}`);
+          log("info", `Config updated for agent "${oldSlug}": ${changes.join(", ")}`);
+
+          // Update in-memory adapter map if slug changed
+          if (newSlug && newSlug !== oldSlug) {
+            const adapter = agentAdapters.get(oldSlug);
+            if (adapter) {
+              agentAdapters.delete(oldSlug);
+              agentAdapters.set(newSlug, adapter);
+            }
+          }
+        }
+      }
       break;
     }
     case "agent.status": {

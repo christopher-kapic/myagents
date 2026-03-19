@@ -2,6 +2,7 @@ import type { WSContext } from "hono/ws";
 import { createHash } from "node:crypto";
 import prisma from "@myagents/db";
 import { auth } from "@myagents/auth";
+import { apiEvents } from "@myagents/api/events";
 import {
   parseFrame,
   serializeFrame,
@@ -1997,3 +1998,25 @@ export function startHeartbeat(): NodeJS.Timeout {
     }
   }, HEARTBEAT_INTERVAL_MS);
 }
+
+// ─── API Event Bridge ─────────────────────────────────────────────────────────
+// Forward config changes from the REST API to connected CLI nodes via WebSocket
+
+apiEvents.onAgentConfigUpdate((event) => {
+  const conn = connectionRegistry.getNodeConnection(event.nodeId);
+  if (!conn || conn.ws.readyState !== 1) return;
+
+  const frame = createEventFrame("agent.configUpdate", {
+    agentId: event.agentId,
+    oldSlug: event.oldSlug,
+    newSlug: event.newSlug,
+    timeout: event.timeout,
+  });
+
+  try {
+    conn.ws.send(serializeFrame(frame));
+    console.log(`[WS] pushed configUpdate to node ${event.nodeId} for agent ${event.oldSlug}`);
+  } catch {
+    // Node may have disconnected between the check and the send
+  }
+});

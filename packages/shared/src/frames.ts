@@ -17,6 +17,7 @@ export const FrameMethod = z.enum([
   "agent.heartbeat",
   "agent.status",
   "agent.list",
+  "agent.configUpdate",
   "agent.circuitBreaker.reset",
   "queue.dequeued",
 ]);
