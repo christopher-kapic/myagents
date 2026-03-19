@@ -122,6 +122,7 @@ function handleFrame(frame: Frame, client: WsClient): void {
       const agentSlug = payload?.["agentSlug"] as string | undefined;
       const message = payload?.["content"] as string | undefined;
       const conversationId = payload?.["conversationId"] as string | undefined;
+      const history = (payload?.["history"] as Array<{ role: "user" | "agent"; content: string }>) ?? [];
 
       console.log(`Received message for agent "${agentSlug}": ${message?.slice(0, 80)}`);
       log("info", `Message received for agent "${agentSlug}": ${message?.slice(0, 120)}`);
@@ -144,7 +145,7 @@ function handleFrame(frame: Frame, client: WsClient): void {
       }
 
       // Process message asynchronously through the adapter
-      void processMessage(adapter, message, conversationId ?? "", agentSlug, frame.id, client);
+      void processMessage(adapter, message, conversationId ?? "", agentSlug, frame.id, client, history);
       break;
     }
     case "agent.status": {
@@ -171,11 +172,12 @@ async function processMessage(
   agentSlug: string,
   frameId: string,
   client: WsClient,
+  history: Array<{ role: "user" | "agent"; content: string }> = [],
 ): Promise<void> {
   try {
     let fullContent = "";
 
-    for await (const chunk of adapter.sendMessage(message, [])) {
+    for await (const chunk of adapter.sendMessage(message, history)) {
       fullContent += chunk;
 
       // Send chunk for streaming display
@@ -197,9 +199,13 @@ async function processMessage(
     console.error(`Error processing message for ${agentSlug}: ${errorMessage}`);
     log("error", `Error processing message for ${agentSlug}: ${errorMessage}`);
 
-    client.sendResponse("message.response", {
+    // Send as message.done with error flag so the frontend displays the error
+    // and clears the sending state
+    client.sendRequest("message.done", {
       conversationId,
-      content: `Error from agent "${agentSlug}": ${errorMessage}`,
-    }, frameId);
+      agentSlug,
+      content: `Error: ${errorMessage}`,
+      error: true,
+    });
   }
 }

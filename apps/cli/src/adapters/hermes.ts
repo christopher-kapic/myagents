@@ -44,9 +44,11 @@ export class HermesAdapter implements AgentAdapter {
 
   async *sendMessage(
     message: string,
-    _history: Array<{ role: "user" | "agent"; content: string }>,
+    history: Array<{ role: "user" | "agent"; content: string }>,
   ): AsyncGenerator<string> {
-    const args = ["chat", "-q", message, "--quiet"];
+    // Build the full message with conversation history so hermes has context
+    const fullMessage = this.buildMessageWithHistory(message, history);
+    const args = ["chat", "-q", fullMessage, "--quiet"];
 
     // Support --toolsets passthrough from adapter config
     if (this.config.toolsets && this.config.toolsets.length > 0) {
@@ -55,6 +57,28 @@ export class HermesAdapter implements AgentAdapter {
 
     const output = await this.runProcess(args);
     yield output;
+  }
+
+  /**
+   * Prepend conversation history to the message so hermes has context
+   * of the ongoing conversation. Without this, each hermes invocation
+   * is completely stateless.
+   */
+  private buildMessageWithHistory(
+    message: string,
+    history: Array<{ role: "user" | "agent"; content: string }>,
+  ): string {
+    if (history.length === 0) return message;
+
+    const lines: string[] = [
+      "<conversation_history>",
+    ];
+    for (const entry of history) {
+      const role = entry.role === "user" ? "User" : "Assistant";
+      lines.push(`${role}: ${entry.content}`);
+    }
+    lines.push("</conversation_history>", "", message);
+    return lines.join("\n");
   }
 
   async getStatus(): Promise<AgentStatus> {

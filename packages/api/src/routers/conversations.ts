@@ -243,6 +243,36 @@ export const conversationsRouter = {
       return serializeConversation(conversation);
     }),
 
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        title: z.string().max(255),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: input.id },
+        select: { userId: true },
+      });
+
+      if (!conversation || (!isAdmin(context) && conversation.userId !== userId)) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Conversation not found",
+        });
+      }
+
+      const updated = await prisma.conversation.update({
+        where: { id: input.id },
+        data: { title: input.title },
+        select: conversationSelect,
+      });
+
+      return serializeConversation(updated);
+    }),
+
   delete: protectedProcedure
     .input(
       z.object({

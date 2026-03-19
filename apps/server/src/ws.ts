@@ -287,6 +287,9 @@ async function handleFrame(
     case "auth":
       console.log(`[WS] received ${frame.method} from ${connection.type}`);
       return null;
+
+    default:
+      return null;
   }
 }
 
@@ -990,6 +993,18 @@ async function handleMessageSend(
     }
   }
 
+  // Fetch recent message history for context (before saving current message)
+  const recentMessages = await prisma.message.findMany({
+    where: { conversationId },
+    select: { content: true, senderType: true },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+  const history = recentMessages.reverse().map((m) => ({
+    role: String(m.senderType) === "user" ? "user" as const : "agent" as const,
+    content: m.content,
+  }));
+
   // Save user message to DB
   const message = await prisma.message.create({
     data: {
@@ -1001,12 +1016,13 @@ async function handleMessageSend(
     select: { id: true },
   });
 
-  // Forward to CLI node
+  // Forward to CLI node (include history for context)
   const forwardFrame = createRequestFrame("message.send", {
     conversationId,
     agentSlug: agent.slug,
     content,
     messageId: message.id,
+    history,
   });
   nodeConn.ws.send(serializeFrame(forwardFrame));
 
@@ -1408,6 +1424,7 @@ async function handleMessageDone(
   const payload = frame.payload as {
     conversationId?: string;
     content?: string;
+    error?: boolean;
   };
 
   if (!payload?.conversationId || !payload?.content) return null;
@@ -1423,22 +1440,32 @@ async function handleMessageDone(
   });
   if (!conversation) return null;
 
-  // Save agent message to DB
-  const message = await prisma.message.create({
-    data: {
-      conversationId: payload.conversationId,
-      senderType: "agent",
-      senderId: conversation.agentId,
-      content: payload.content,
-    },
-    select: { id: true },
-  });
+  let messageId: string | undefined;
 
-  // Update conversation updatedAt
-  await prisma.conversation.update({
-    where: { id: payload.conversationId },
-    data: { updatedAt: new Date() },
-  });
+  if (payload.error) {
+    // Error responses: don't save to DB, just forward to clients
+    console.warn(
+      `[WS] agent error for conversation ${payload.conversationId}: ${payload.content}`,
+    );
+  } else {
+    // Save agent message to DB
+    const message = await prisma.message.create({
+      data: {
+        conversationId: payload.conversationId,
+        senderType: "agent",
+        senderId: conversation.agentId,
+        content: payload.content,
+      },
+      select: { id: true },
+    });
+    messageId = message.id;
+
+    // Update conversation updatedAt
+    await prisma.conversation.update({
+      where: { id: payload.conversationId },
+      data: { updatedAt: new Date() },
+    });
+  }
 
   // Check if this is an A2A conversation — route done event to sender agent's node
   const a2aInfo = a2aConversations.get(payload.conversationId);
@@ -1447,9 +1474,10 @@ async function handleMessageDone(
     if (senderNodeConn && senderNodeConn.ws.readyState === 1) {
       const doneFrame = createEventFrame("message.done", {
         conversationId: payload.conversationId,
-        messageId: message.id,
+        messageId,
         content: payload.content,
         targetAgent: a2aInfo.senderAgentSlug,
+        error: payload.error || undefined,
       });
       senderNodeConn.ws.send(serializeFrame(doneFrame));
     }
@@ -1463,8 +1491,9 @@ async function handleMessageDone(
   );
   const eventFrame = createEventFrame("message.done", {
     conversationId: payload.conversationId,
-    messageId: message.id,
+    messageId,
     content: payload.content,
+    error: payload.error || undefined,
   });
   const serialized = serializeFrame(eventFrame);
   for (const client of clientConns) {
@@ -1473,14 +1502,16 @@ async function handleMessageDone(
     }
   }
 
-  // Send push notification (fire-and-forget)
-  void sendAgentResponsePush(
-    conversation.userId,
-    conversation.agent.name,
-    conversation.agent.slug,
-    payload.conversationId,
-    payload.content,
-  );
+  // Send push notification only for successful responses
+  if (!payload.error) {
+    void sendAgentResponsePush(
+      conversation.userId,
+      conversation.agent.name,
+      conversation.agent.slug,
+      payload.conversationId,
+      payload.content,
+    );
+  }
 
   return null;
 }

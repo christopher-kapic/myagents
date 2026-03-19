@@ -6,11 +6,12 @@ import {
   DropdownMenuTrigger,
 } from "@myagents/ui/components/dropdown-menu";
 import { Skeleton } from "@myagents/ui/components/skeleton";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Bot,
+  Check,
   Download,
   FileJson,
   FileText,
@@ -18,9 +19,11 @@ import {
   Mic,
   MicOff,
   PanelLeft,
+  Pencil,
   Send,
   Square,
   User,
+  X,
 } from "lucide-react";
 import {
   useCallback,
@@ -192,6 +195,7 @@ function ConversationPage() {
           conversationId?: string;
           messageId?: string;
           content?: string;
+          error?: boolean;
         };
         if (payload?.conversationId === id && payload.content) {
           setLocalMessages((prev) => {
@@ -206,6 +210,7 @@ function ConversationPage() {
                   id: payload.messageId ?? last.id,
                   content: payload.content!,
                   pending: false,
+                  error: payload.error || undefined,
                 },
               ];
             }
@@ -217,18 +222,21 @@ function ConversationPage() {
                 content: payload.content!,
                 senderType: "agent",
                 createdAt: new Date().toISOString(),
+                error: payload.error || undefined,
               },
             ];
           });
           setSending(false);
           // Invalidate conversation list to update last message preview
-          queryClient.invalidateQueries({
-            queryKey: orpc.conversations.list.queryOptions({
-              input: { agentId: "" },
-            }).queryKey[0]
-              ? undefined
-              : undefined,
-          });
+          if (!payload.error) {
+            queryClient.invalidateQueries({
+              queryKey: orpc.conversations.list.queryOptions({
+                input: { agentId: "" },
+              }).queryKey[0]
+                ? undefined
+                : undefined,
+            });
+          }
         }
       }
 
@@ -402,6 +410,54 @@ function ConversationPage() {
     ? String(conversation.title)
     : "Untitled conversation";
 
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(title);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  const renameMutation = useMutation({
+    mutationFn: (newTitle: string) =>
+      orpc.conversations.update.call({ id, title: newTitle }),
+    onSuccess: () => {
+      setIsRenaming(false);
+      queryClient.invalidateQueries({
+        queryKey: orpc.conversations.get.queryOptions({ input: { id } }).queryKey,
+      });
+      // Also refresh sidebar list
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey.some((k) => typeof k === "string" && k.includes("conversations")),
+      });
+    },
+  });
+
+  const handleRenameSubmit = () => {
+    const trimmed = renameValue.trim();
+    if (trimmed && trimmed !== title) {
+      renameMutation.mutate(trimmed);
+    } else {
+      setIsRenaming(false);
+    }
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleRenameSubmit();
+    } else if (e.key === "Escape") {
+      setIsRenaming(false);
+      setRenameValue(title);
+    }
+  };
+
+  // Focus input when entering rename mode
+  useEffect(() => {
+    if (isRenaming) {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }
+  }, [isRenaming]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -423,7 +479,52 @@ function ConversationPage() {
           <ArrowLeft className="h-4 w-4" />
         </Link>
         <div className="flex-1 min-w-0">
-          <h1 className="text-sm font-medium truncate">{title}</h1>
+          {isRenaming ? (
+            <div className="flex items-center gap-1">
+              <input
+                ref={renameInputRef}
+                type="text"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={handleRenameKeyDown}
+                onBlur={handleRenameSubmit}
+                className="text-sm font-medium bg-transparent border-b border-foreground/30 focus:border-foreground outline-none w-full min-w-0"
+                maxLength={255}
+                disabled={renameMutation.isPending}
+              />
+              <button
+                type="button"
+                onClick={handleRenameSubmit}
+                className="inline-flex items-center justify-center h-6 w-6 rounded hover:bg-accent shrink-0"
+              >
+                <Check className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsRenaming(false);
+                  setRenameValue(title);
+                }}
+                className="inline-flex items-center justify-center h-6 w-6 rounded hover:bg-accent shrink-0"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 group">
+              <h1 className="text-sm font-medium truncate">{title}</h1>
+              <button
+                type="button"
+                onClick={() => {
+                  setRenameValue(title);
+                  setIsRenaming(true);
+                }}
+                className="inline-flex items-center justify-center h-6 w-6 rounded hover:bg-accent shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <Pencil className="h-3 w-3 text-muted-foreground" />
+              </button>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             {slug}
             {!connected && (
