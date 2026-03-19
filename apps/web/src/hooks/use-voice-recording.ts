@@ -95,9 +95,14 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
         : engine;
 
   // ── Whisper backend: watch output ──────────────────────────────────────
+  // Only transition out of "processing" when the worker is done (isBusy=false).
+  // The worker sends "update" events with partial text (isBusy still true) and
+  // "complete" when finished (isBusy=false). Without the isBusy check, an early
+  // "update" with empty text would set mode to "idle", causing the final
+  // "complete" result to be ignored.
   useEffect(() => {
     if (effectiveEngine !== "whisper") return;
-    if (whisper.output && mode === "processing") {
+    if (whisper.output && !whisper.isBusy && mode === "processing") {
       const text = whisper.output.text.trim();
       if (text) {
         setTranscript(text);
@@ -112,7 +117,7 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
       whisperStartTimeRef.current = 0;
       setMode("idle");
     }
-  }, [whisper.output, mode, effectiveEngine, webSpeechAvailable]);
+  }, [whisper.output, whisper.isBusy, mode, effectiveEngine, webSpeechAvailable]);
 
   // Watch whisper errors
   useEffect(() => {

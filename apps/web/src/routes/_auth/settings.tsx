@@ -1,5 +1,5 @@
 import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
-import { KeyRound, Mic, Settings, Shield, UserCog } from "lucide-react";
+import { Bell, KeyRound, Mic, Settings, Shield, UserCog } from "lucide-react";
 
 export const Route = createFileRoute("/_auth/settings")({
   component: SettingsLayout,
@@ -14,6 +14,7 @@ function SettingsLayout() {
     { to: "/settings/security", label: "Security", icon: Shield, exact: false },
     { to: "/settings/api-keys", label: "API Keys", icon: KeyRound, exact: false },
     { to: "/settings/voice", label: "Voice", icon: Mic, exact: false },
+    { to: "/settings/notifications", label: "Notifications", icon: Bell, exact: false },
     ...(isAdmin
       ? [{ to: "/settings/admin" as const, label: "Admin", icon: UserCog, exact: false }]
       : []),
