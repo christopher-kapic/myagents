@@ -86,7 +86,13 @@ export const pushRouter = {
       );
 
       const sent = results.filter((r) => r.status === "fulfilled").length;
-      return { sent, total: subscriptions.length };
+      const errors = results
+        .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+        .map((r) => String(r.reason?.message ?? r.reason));
+      if (errors.length > 0) {
+        console.error("[push] send errors:", errors);
+      }
+      return { sent, total: subscriptions.length, errors };
     }),
 
   vapidPublicKey: protectedProcedure.handler(() => {

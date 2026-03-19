@@ -37,7 +37,11 @@ function AdminSettings() {
       });
     },
     onSuccess: (data) => {
-      toast.success(`Push notification sent to ${data.sent} of ${data.total} subscriptions`);
+      if (data.sent === data.total) {
+        toast.success(`Push notification sent to ${data.sent} of ${data.total} subscriptions`);
+      } else {
+        toast.error(`Push notification sent to ${data.sent} of ${data.total} subscriptions${data.errors?.length ? `: ${data.errors[0]}` : ""}`);
+      }
     },
     onError: (error) => {
       toast.error(error.message || "Failed to send test notification");
