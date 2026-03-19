@@ -1,8 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Bot, LayoutDashboard, MessageSquare, Settings } from "lucide-react";
 
-import { useMobileKeyboard } from "@/hooks/use-mobile-keyboard";
-
 const navItems = [
   { to: "/dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
   { to: "/agents" as const, label: "Agents", icon: Bot },
@@ -10,13 +8,13 @@ const navItems = [
   { to: "/settings" as const, label: "Settings", icon: Settings },
 ];
 
-export default function BottomNav() {
-  const hidden = useMobileKeyboard();
-
+export default function BottomNav({ hidden }: { hidden?: boolean }) {
   if (hidden) return null;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/80 backdrop-blur-lg md:hidden pb-[env(safe-area-inset-bottom,0px)]"
+    <nav
+      className="border-t bg-background/80 backdrop-blur-lg md:hidden"
+      style={{ paddingBottom: "var(--safe-area-bottom)" }}
     >
       <div className="flex items-center justify-around h-14">
         {navItems.map((item) => (

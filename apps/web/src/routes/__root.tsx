@@ -59,7 +59,7 @@ function RootComponent() {
         storageKey="vite-ui-theme"
       >
         <div
-          className={`grid h-svh pb-[calc(3.5rem+var(--safe-area-bottom))] md:pb-0 ${mobileKeyboardOpen ? "grid-rows-[1fr]" : "grid-rows-[auto_1fr]"}`}
+          className={`grid h-svh ${mobileKeyboardOpen ? "grid-rows-[1fr]" : "grid-rows-[auto_1fr_auto] md:grid-rows-[auto_1fr]"}`}
           style={{
             paddingTop: mobileKeyboardOpen ? undefined : "var(--safe-area-top)",
             paddingLeft: "var(--safe-area-left)",
@@ -70,7 +70,7 @@ function RootComponent() {
           <main style={{ viewTransitionName: "page" }} className="min-h-0 overflow-y-auto">
             <Outlet />
           </main>
-          <BottomNav />
+          <BottomNav hidden={mobileKeyboardOpen} />
         </div>
         <Toaster richColors />
       </ThemeProvider>

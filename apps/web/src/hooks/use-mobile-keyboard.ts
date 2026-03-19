@@ -1,23 +1,38 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Detects when a virtual keyboard is likely open on mobile devices.
- * Uses both input focus tracking and visualViewport size changes.
+ * Uses input focus tracking combined with visualViewport size changes.
+ *
+ * iOS PWA quirks handled:
+ * - window.innerHeight doesn't change when the keyboard opens in standalone mode,
+ *   so we capture the initial visualViewport height on mount as the baseline.
+ * - iOS fires "scroll" events (not just "resize") on visualViewport when the
+ *   keyboard opens, so we listen to both.
  */
 export function useMobileKeyboard() {
   const [inputFocused, setInputFocused] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const initialHeight = useRef(0);
 
   useEffect(() => {
+    const isEditable = (el: HTMLElement) => {
+      const tag = el.tagName;
+      return (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        el.isContentEditable ||
+        el.getAttribute("role") === "textbox"
+      );
+    };
+
     const onFocusIn = (e: FocusEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") {
+      if (e.target instanceof HTMLElement && isEditable(e.target)) {
         setInputFocused(true);
       }
     };
     const onFocusOut = (e: FocusEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") {
+      if (e.target instanceof HTMLElement && isEditable(e.target)) {
         setInputFocused(false);
       }
     };
@@ -32,11 +47,26 @@ export function useMobileKeyboard() {
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
-    const onResize = () => {
-      setKeyboardOpen(vv.height < window.innerHeight * 0.8);
+
+    // Capture baseline height before any keyboard opens.
+    // On iOS standalone mode, window.innerHeight stays constant,
+    // so we use the initial visualViewport height instead.
+    initialHeight.current = vv.height;
+
+    const check = () => {
+      const baseline = initialHeight.current || window.innerHeight;
+      // Keyboard is open when viewport shrinks by >20% from baseline
+      setKeyboardOpen(vv.height < baseline * 0.8);
     };
-    vv.addEventListener("resize", onResize);
-    return () => vv.removeEventListener("resize", onResize);
+
+    // iOS fires "scroll" on visualViewport when keyboard opens;
+    // Android/desktop fires "resize". Listen to both.
+    vv.addEventListener("resize", check);
+    vv.addEventListener("scroll", check);
+    return () => {
+      vv.removeEventListener("resize", check);
+      vv.removeEventListener("scroll", check);
+    };
   }, []);
 
   return inputFocused || keyboardOpen;
