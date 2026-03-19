@@ -174,7 +174,7 @@ function AgentDetailPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 border-b mb-6">
+      <div className="flex items-center gap-1 border-b mb-6 overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab("conversations")}
@@ -291,9 +291,9 @@ function ConversationsTab({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium">Conversations</h2>
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 overflow-x-auto">
+        <h2 className="text-lg font-medium shrink-0">Conversations</h2>
+        <div className="flex items-center gap-2 overflow-x-auto shrink-0">
           {conversations.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger
@@ -326,7 +326,7 @@ function ConversationsTab({
             disabled={createMutation.isPending}
           >
             <Plus className="h-4 w-4 mr-1" />
-            New Conversation
+            New
           </Button>
         </div>
       </div>

@@ -13,6 +13,19 @@ export default function BottomNav() {
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
+    const vv = window.visualViewport;
+
+    // Use visualViewport API to detect virtual keyboard (most reliable on iOS)
+    if (vv) {
+      const onResize = () => {
+        const keyboardOpen = vv.height < window.innerHeight * 0.8;
+        setHidden(keyboardOpen);
+      };
+      vv.addEventListener("resize", onResize);
+      return () => vv.removeEventListener("resize", onResize);
+    }
+
+    // Fallback: focus-based detection
     const onFocusIn = (e: FocusEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") {
@@ -36,8 +49,7 @@ export default function BottomNav() {
   if (hidden) return null;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/80 backdrop-blur-lg md:hidden"
-      style={{ paddingBottom: "var(--safe-area-bottom)" }}
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/80 backdrop-blur-lg md:hidden pb-[env(safe-area-inset-bottom,0px)]"
     >
       <div className="flex items-center justify-around h-14">
         {navItems.map((item) => (
