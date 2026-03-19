@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bot,
+  Clock,
   Download,
   FileJson,
   FileText,
@@ -800,6 +801,11 @@ function SettingsTab({
   const [circuitBreakerThreshold, setCircuitBreakerThreshold] = useState(
     Number(agent.circuitBreakerThreshold) || 10,
   );
+  const currentTimeout = (() => {
+    const config = agent.adapterConfig as Record<string, unknown> | null;
+    return (config?.timeout as number) ?? 120000;
+  })();
+  const [timeout, setTimeoutValue] = useState(currentTimeout);
 
   const updateMutation = useMutation({
     mutationFn: (data: { name?: string; description?: string | null }) =>
@@ -814,6 +820,16 @@ function SettingsTab({
   const rateLimitMutation = useMutation({
     mutationFn: (data: { rateLimitPerMin: number; circuitBreakerThreshold: number }) =>
       orpc.agents.setRateLimit.call({ id: String(agent.id), ...data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
+      });
+    },
+  });
+
+  const timeoutMutation = useMutation({
+    mutationFn: (data: { timeout: number }) =>
+      orpc.agents.setTimeout.call({ id: String(agent.id), ...data }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
@@ -852,6 +868,12 @@ function SettingsTab({
   const hasChanges =
     name !== String(agent.name) ||
     description !== (agent.description ? String(agent.description) : "");
+
+  const handleSaveTimeout = () => {
+    timeoutMutation.mutate({ timeout });
+  };
+
+  const hasTimeoutChanges = timeout !== currentTimeout;
 
   const hasRateLimitChanges =
     rateLimitPerMin !== (Number(agent.rateLimitPerMin) || 60) ||
@@ -1053,6 +1075,58 @@ function SettingsTab({
                 </Button>
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Response Timeout */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            Response Timeout
+          </CardTitle>
+          <CardDescription>
+            Maximum time the agent has to respond to a message before the
+            request is terminated.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="timeout" className="text-sm font-medium">
+              Timeout (milliseconds)
+            </label>
+            <Input
+              id="timeout"
+              type="number"
+              min={1000}
+              max={600000}
+              step={1000}
+              value={timeout}
+              onChange={(e) => setTimeoutValue(Number(e.target.value) || 1000)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Value between 1,000ms (1s) and 600,000ms (10min). Default:
+              120,000ms (2 minutes).
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleSaveTimeout}
+              disabled={!hasTimeoutChanges || timeoutMutation.isPending}
+            >
+              {timeoutMutation.isPending ? "Saving..." : "Save Timeout"}
+            </Button>
+            {timeoutMutation.isSuccess && (
+              <span className="text-sm text-green-600 dark:text-green-400">
+                Saved
+              </span>
+            )}
+            {timeoutMutation.isError && (
+              <span className="text-sm text-red-600 dark:text-red-400">
+                Failed to save
+              </span>
+            )}
           </div>
         </CardContent>
       </Card>

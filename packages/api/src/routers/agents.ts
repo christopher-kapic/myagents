@@ -459,6 +459,40 @@ export const agentsRouter = {
       return serializeAgent(updated);
     }),
 
+  setTimeout: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        timeout: z.number().int().min(1000).max(600000),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+      const admin = isAdmin(context);
+
+      const agent = await prisma.agent.findUnique({
+        where: { id: input.id },
+        select: { userId: true, adapterConfig: true },
+      });
+
+      if (!agent || (!admin && agent.userId !== userId)) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Agent not found",
+        });
+      }
+
+      const currentConfig = (agent.adapterConfig as Record<string, unknown>) ?? {};
+      const updated = await prisma.agent.update({
+        where: { id: input.id },
+        data: {
+          adapterConfig: { ...currentConfig, timeout: input.timeout },
+        },
+        select: agentSelect,
+      });
+
+      return serializeAgent(updated);
+    }),
+
   getRateLimit: protectedProcedure
     .input(
       z.object({

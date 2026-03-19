@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { Bot, LayoutDashboard, MessageSquare, Settings } from "lucide-react";
-import { useEffect, useState } from "react";
+
+import { useMobileKeyboard } from "@/hooks/use-mobile-keyboard";
 
 const navItems = [
   { to: "/dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
@@ -10,43 +11,7 @@ const navItems = [
 ];
 
 export default function BottomNav() {
-  const [inputFocused, setInputFocused] = useState(false);
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
-
-  // Detect input focus via DOM events
-  useEffect(() => {
-    const onFocusIn = (e: FocusEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") {
-        setInputFocused(true);
-      }
-    };
-    const onFocusOut = (e: FocusEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") {
-        setInputFocused(false);
-      }
-    };
-    document.addEventListener("focusin", onFocusIn);
-    document.addEventListener("focusout", onFocusOut);
-    return () => {
-      document.removeEventListener("focusin", onFocusIn);
-      document.removeEventListener("focusout", onFocusOut);
-    };
-  }, []);
-
-  // Detect virtual keyboard via visualViewport (reliable on iOS)
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-    const onResize = () => {
-      setKeyboardOpen(vv.height < window.innerHeight * 0.8);
-    };
-    vv.addEventListener("resize", onResize);
-    return () => vv.removeEventListener("resize", onResize);
-  }, []);
-
-  const hidden = inputFocused || keyboardOpen;
+  const hidden = useMobileKeyboard();
 
   if (hidden) return null;
 

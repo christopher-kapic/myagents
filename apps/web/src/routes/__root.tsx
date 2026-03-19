@@ -12,6 +12,7 @@ import BottomNav from "@/components/bottom-nav";
 import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useAppUpdate } from "@/hooks/use-app-update";
+import { useMobileKeyboard } from "@/hooks/use-mobile-keyboard";
 import { link, orpc } from "@/utils/orpc";
 
 import "../index.css";
@@ -46,6 +47,7 @@ function RootComponent() {
   useAppUpdate();
   const [client] = useState<AppRouterClient>(() => createORPCClient(link));
   const [orpcUtils] = useState(() => createTanstackQueryUtils(client));
+  const mobileKeyboardOpen = useMobileKeyboard();
 
   return (
     <>
@@ -57,14 +59,14 @@ function RootComponent() {
         storageKey="vite-ui-theme"
       >
         <div
-          className="grid grid-rows-[auto_1fr] h-svh pb-[calc(3.5rem+var(--safe-area-bottom))] md:pb-0"
+          className={`grid h-svh pb-[calc(3.5rem+var(--safe-area-bottom))] md:pb-0 ${mobileKeyboardOpen ? "grid-rows-[1fr]" : "grid-rows-[auto_1fr]"}`}
           style={{
-            paddingTop: "var(--safe-area-top)",
+            paddingTop: mobileKeyboardOpen ? undefined : "var(--safe-area-top)",
             paddingLeft: "var(--safe-area-left)",
             paddingRight: "var(--safe-area-right)",
           }}
         >
-          <Header />
+          {!mobileKeyboardOpen && <Header />}
           <main style={{ viewTransitionName: "page" }} className="min-h-0 overflow-y-auto">
             <Outlet />
           </main>
