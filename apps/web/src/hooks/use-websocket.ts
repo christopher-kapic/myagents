@@ -16,7 +16,7 @@ interface UseWebSocketReturn {
 }
 
 function getWsUrl(): string {
-  const serverUrl = env.VITE_SERVER_URL;
+  const serverUrl = env.VITE_SERVER_URL ?? window.location.origin;
   const wsUrl = serverUrl.replace(/^http/, "ws");
   return `${wsUrl}/ws`;
 }
