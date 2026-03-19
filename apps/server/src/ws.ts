@@ -2011,6 +2011,8 @@ apiEvents.onAgentConfigUpdate((event) => {
     oldSlug: event.oldSlug,
     newSlug: event.newSlug,
     timeout: event.timeout,
+    name: event.name,
+    description: event.description,
   });
 
   try {

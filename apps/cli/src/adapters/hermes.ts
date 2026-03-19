@@ -1,6 +1,10 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { AgentAdapter, AgentStatus, HermesAdapterConfig, MessageContext } from "./types.js";
+
+const SESSION_MAP_PATH = join(homedir(), ".myagents", "hermes-sessions.json");
 
 const DEFAULT_TIMEOUT = 120_000; // 2 minutes
 
@@ -51,12 +55,6 @@ export class HermesAdapter implements AgentAdapter {
   private binaryPath: string;
   private agentSlug: string;
 
-  /**
-   * Maps conversationId → hermes session_id so we can resume
-   * conversations across multiple messages using --resume.
-   */
-  private sessionMap = new Map<string, string>();
-
   constructor(config: HermesAdapterConfig = {}, agentSlug: string) {
     this.config = config;
     this.binaryPath = config.binaryPath ?? "hermes";
@@ -73,7 +71,7 @@ export class HermesAdapter implements AgentAdapter {
     // Resume existing hermes session if we have one for this conversation
     const conversationId = context?.conversationId;
     if (conversationId) {
-      const existingSessionId = this.sessionMap.get(conversationId);
+      const existingSessionId = this.getSessionId(conversationId);
       if (existingSessionId) {
         args.push("--resume", existingSessionId);
       }
@@ -89,7 +87,7 @@ export class HermesAdapter implements AgentAdapter {
     // Parse and store the session_id for future messages in this conversation
     const { response, sessionId } = parseSessionId(rawOutput);
     if (sessionId && conversationId) {
-      this.sessionMap.set(conversationId, sessionId);
+      this.setSessionId(conversationId, sessionId);
     }
 
     yield response;
@@ -111,6 +109,22 @@ export class HermesAdapter implements AgentAdapter {
         message: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  private getSessionId(conversationId: string): string | undefined {
+    if (!existsSync(SESSION_MAP_PATH)) return undefined;
+    const map = JSON.parse(readFileSync(SESSION_MAP_PATH, "utf-8"));
+    return map[conversationId];
+  }
+
+  private setSessionId(conversationId: string, sessionId: string): void {
+    let map: Record<string, string> = {};
+    if (existsSync(SESSION_MAP_PATH)) {
+      map = JSON.parse(readFileSync(SESSION_MAP_PATH, "utf-8"));
+    }
+    map[conversationId] = sessionId;
+    mkdirSync(join(homedir(), ".myagents"), { recursive: true });
+    writeFileSync(SESSION_MAP_PATH, JSON.stringify(map, null, 2));
   }
 
   private runProcess(args: string[]): Promise<string> {

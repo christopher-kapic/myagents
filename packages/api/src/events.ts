@@ -6,6 +6,8 @@ export interface AgentConfigUpdateEvent {
   oldSlug: string;
   newSlug?: string;
   timeout?: number;
+  name?: string;
+  description?: string;
 }
 
 class ApiEvents extends EventEmitter {

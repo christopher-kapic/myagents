@@ -6,7 +6,7 @@ import { createAdapter } from "../adapter-registry.js";
 import type { AgentAdapter } from "../adapters/types.js";
 import type { Frame } from "@myagents/shared";
 import { log, ensureLogsDir } from "../logger.js";
-import { updateAgentConfig } from "../agent-config.js";
+import { updateAgentConfig, ensureAgentsInYaml } from "../agent-config.js";
 
 /** Map of agent slug → adapter instance, populated after agent detection */
 const agentAdapters = new Map<string, AgentAdapter>();
@@ -41,6 +41,7 @@ export const connectCommand = new Command("connect")
       console.log("No agents detected on this machine.");
     } else {
       console.log(`Found ${detectedAgents.length} agent(s).`);
+      ensureAgentsInYaml(detectedAgents);
     }
 
     // Create adapters for detected agents
@@ -154,9 +155,11 @@ function handleFrame(frame: Frame, client: WsClient): void {
       const oldSlug = payload?.["oldSlug"] as string | undefined;
       const newSlug = payload?.["newSlug"] as string | undefined;
       const timeout = payload?.["timeout"] as number | undefined;
+      const name = payload?.["name"] as string | undefined;
+      const description = payload?.["description"] as string | undefined;
 
       if (oldSlug) {
-        const changes = updateAgentConfig(oldSlug, { newSlug, timeout });
+        const changes = updateAgentConfig(oldSlug, { newSlug, timeout, name, description });
         if (changes.length > 0) {
           console.log(`Config updated for agent "${oldSlug}": ${changes.join(", ")}`);
           log("info", `Config updated for agent "${oldSlug}": ${changes.join(", ")}`);

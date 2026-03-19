@@ -351,12 +351,14 @@ export const agentsRouter = {
       });
 
       // Notify connected CLI node of config changes so it updates locally
-      if (input.slug !== undefined && agent.nodeId) {
+      if (agent.nodeId && (input.slug !== undefined || input.name !== undefined || input.description !== undefined)) {
         apiEvents.emitAgentConfigUpdate({
           agentId: input.id,
           nodeId: agent.nodeId,
           oldSlug: agent.slug,
           newSlug: input.slug,
+          name: input.name,
+          description: input.description ?? undefined,
         });
       }
 

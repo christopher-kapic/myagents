@@ -36,6 +36,7 @@ export default defineConfig({
                 short_name: "MyAgents",
                 description: "MyAgents - AI Agent Fleet Management",
                 theme_color: "#0c0c0c",
+                background_color: "#0c0c0c",
             },
             pwaAssets: { disabled: false, config: true },
             devOptions: { enabled: true },
