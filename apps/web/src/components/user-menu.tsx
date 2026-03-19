@@ -35,11 +35,11 @@ export default function UserMenu() {
       <DropdownMenuTrigger render={<Button variant="outline" />}>
         {session.user.name}
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="bg-card min-w-56">
+      <DropdownMenuContent className="bg-card w-72">
         <DropdownMenuGroup>
           <DropdownMenuLabel>My Account</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="truncate">{session.user.email}</DropdownMenuItem>
+          <DropdownMenuItem className="block truncate">{session.user.email}</DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => navigate({ to: "/settings" })}
           >

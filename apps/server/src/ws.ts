@@ -1423,6 +1423,7 @@ async function processNextQueuedMessage(
   conversationId: string,
   userId: string,
   agentId: string,
+  previousError?: string,
 ) {
   try {
     // Find the next queued message (lowest position)
@@ -1460,6 +1461,15 @@ async function processNextQueuedMessage(
       role: String(m.senderType) === "user" ? "user" as const : "agent" as const,
       content: m.content,
     }));
+
+    // If the previous message errored, include the error in history so the
+    // agent has context that the prior attempt failed
+    if (previousError) {
+      history.push({
+        role: "agent" as const,
+        content: `[Error processing previous message: ${previousError}]`,
+      });
+    }
 
     // Save user message to DB
     const message = await prisma.message.create({
@@ -1618,13 +1628,13 @@ async function handleMessageDone(
   }
 
   // Process queued messages: dequeue next and send automatically
-  if (!payload.error) {
-    void processNextQueuedMessage(
-      payload.conversationId,
-      conversation.userId,
-      conversation.agentId,
-    );
-  }
+  // Always process queue even on error, so queued messages don't get stuck
+  void processNextQueuedMessage(
+    payload.conversationId,
+    conversation.userId,
+    conversation.agentId,
+    payload.error ? payload.content : undefined,
+  );
 
   return null;
 }
