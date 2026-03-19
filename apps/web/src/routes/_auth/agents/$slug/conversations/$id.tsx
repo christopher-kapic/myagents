@@ -382,6 +382,36 @@ function ConversationPage() {
     }
   }, [id, nextCursor, loadingMore]);
 
+  // Rename state — must be declared before early returns to satisfy Rules of Hooks
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  const renameMutation = useMutation({
+    mutationFn: (newTitle: string) =>
+      orpc.conversations.update.call({ id, title: newTitle }),
+    onSuccess: () => {
+      setIsRenaming(false);
+      queryClient.invalidateQueries({
+        queryKey: orpc.conversations.get.queryOptions({ input: { id } }).queryKey,
+      });
+      // Also refresh sidebar list
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey.some((k) => typeof k === "string" && k.includes("conversations")),
+      });
+    },
+  });
+
+  // Focus input when entering rename mode
+  useEffect(() => {
+    if (isRenaming) {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }
+  }, [isRenaming]);
+
   if (conversationQuery.isLoading || messagesQuery.isLoading) {
     return <ConversationSkeleton slug={slug} />;
   }
@@ -410,27 +440,6 @@ function ConversationPage() {
     ? String(conversation.title)
     : "Untitled conversation";
 
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState(title);
-  const renameInputRef = useRef<HTMLInputElement>(null);
-
-  const renameMutation = useMutation({
-    mutationFn: (newTitle: string) =>
-      orpc.conversations.update.call({ id, title: newTitle }),
-    onSuccess: () => {
-      setIsRenaming(false);
-      queryClient.invalidateQueries({
-        queryKey: orpc.conversations.get.queryOptions({ input: { id } }).queryKey,
-      });
-      // Also refresh sidebar list
-      queryClient.invalidateQueries({
-        predicate: (query) =>
-          Array.isArray(query.queryKey) &&
-          query.queryKey.some((k) => typeof k === "string" && k.includes("conversations")),
-      });
-    },
-  });
-
   const handleRenameSubmit = () => {
     const trimmed = renameValue.trim();
     if (trimmed && trimmed !== title) {
@@ -449,14 +458,6 @@ function ConversationPage() {
       setRenameValue(title);
     }
   };
-
-  // Focus input when entering rename mode
-  useEffect(() => {
-    if (isRenaming) {
-      renameInputRef.current?.focus();
-      renameInputRef.current?.select();
-    }
-  }, [isRenaming]);
 
   return (
     <div className="flex flex-col h-full">
