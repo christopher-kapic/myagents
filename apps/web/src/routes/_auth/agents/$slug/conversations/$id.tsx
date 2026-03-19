@@ -67,13 +67,20 @@ function ConversationPage() {
   const [inputValue, setInputValue] = useState("");
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [olderMessages, setOlderMessages] = useState<ChatMessage[]>([]);
   const voice = useVoiceRecording();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Scroll only the messages container to the bottom (avoids scrolling <main> or the whole page)
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTo({ top: container.scrollHeight, behavior });
+    }
+  }, []);
 
   // Server-backed message queue
   const queueQuery = useQuery(
@@ -156,8 +163,10 @@ function ConversationPage() {
 
   // Scroll to bottom on new messages
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [localMessages]);
+    if (localMessages.length > 0) {
+      scrollToBottom();
+    }
+  }, [localMessages, scrollToBottom]);
 
   // Listen for WebSocket events (streaming chunks, done, errors, cross-device sync)
   useEffect(() => {
@@ -220,7 +229,7 @@ function ConversationPage() {
           });
           // Scroll to bottom during streaming
           requestAnimationFrame(() => {
-            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            scrollToBottom();
           });
         }
       }
@@ -754,8 +763,6 @@ function ConversationPage() {
             </div>
           </div>
         ))}
-
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}
@@ -817,10 +824,12 @@ function ConversationPage() {
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onFocus={() => {
-              // On mobile, scroll to bottom when keyboard opens
-              setTimeout(() => {
-                messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-              }, 300);
+              // On mobile, scroll messages to bottom when keyboard opens (only if there are messages)
+              if (localMessages.length > 0) {
+                setTimeout(() => {
+                  scrollToBottom();
+                }, 300);
+              }
             }}
             placeholder={
               voice.isRecording ? "Listening..." : "Type a message..."

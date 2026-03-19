@@ -492,7 +492,7 @@ export const agentsRouter = {
     .input(
       z.object({
         id: z.string(),
-        timeout: z.number().int().min(1000).max(600000),
+        timeout: z.number().int().min(1000).max(86400000),
       }),
     )
     .handler(async ({ input, context }) => {

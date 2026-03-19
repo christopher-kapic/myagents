@@ -26,6 +26,10 @@ export class CustomAdapter implements AgentAdapter {
     this.agentSlug = agentSlug;
   }
 
+  setTimeout(timeout: number): void {
+    this.config = { ...this.config, timeout };
+  }
+
   async *sendMessage(
     message: string,
     history: Array<{ role: "user" | "agent"; content: string }>,

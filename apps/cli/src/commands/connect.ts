@@ -172,6 +172,15 @@ function handleFrame(frame: Frame, client: WsClient): void {
               agentAdapters.set(newSlug, adapter);
             }
           }
+
+          // Update in-memory adapter timeout
+          if (timeout !== undefined) {
+            const adapterSlug = newSlug ?? oldSlug;
+            const adapter = agentAdapters.get(adapterSlug);
+            if (adapter?.setTimeout) {
+              adapter.setTimeout(timeout);
+            }
+          }
         }
       }
       break;

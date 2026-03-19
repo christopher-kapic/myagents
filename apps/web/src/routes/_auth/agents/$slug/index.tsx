@@ -1141,13 +1141,13 @@ function SettingsTab({
               id="timeout"
               type="number"
               min={0.5}
-              max={10}
+              max={1440}
               step={0.5}
               value={timeoutMin}
               onChange={(e) => setTimeoutMin(Number(e.target.value) || 0.5)}
             />
             <p className="text-xs text-muted-foreground">
-              Value between 0.5 and 10 minutes. Default: 2 minutes.
+              Value between 0.5 and 1440 minutes (24 hours). Default: 2 minutes.
             </p>
           </div>
           <div className="flex items-center gap-2">

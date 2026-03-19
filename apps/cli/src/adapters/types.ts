@@ -33,6 +33,11 @@ export interface AgentAdapter {
    * Check the agent's current availability and status.
    */
   getStatus(): Promise<AgentStatus>;
+
+  /**
+   * Update the adapter's timeout at runtime (e.g. when pushed from the web UI).
+   */
+  setTimeout?(timeout: number): void;
 }
 
 /**
