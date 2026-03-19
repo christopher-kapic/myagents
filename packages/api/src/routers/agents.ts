@@ -304,6 +304,7 @@ export const agentsRouter = {
     .input(
       z.object({
         id: z.string(),
+        slug: z.string().min(1).max(100).regex(/^[a-zA-Z0-9-]+$/, "Slug must only contain letters, numbers, and hyphens").optional(),
         name: z.string().min(1).max(255).optional(),
         description: z.string().max(1000).nullish(),
       }),
@@ -323,7 +324,22 @@ export const agentsRouter = {
         });
       }
 
+      // Check slug uniqueness if changing
+      if (input.slug !== undefined) {
+        const ownerUserId = agent.userId;
+        const existing = await prisma.agent.findUnique({
+          where: { userId_slug: { userId: ownerUserId, slug: input.slug } },
+          select: { id: true },
+        });
+        if (existing && existing.id !== input.id) {
+          throw new ORPCError("CONFLICT", {
+            message: "An agent with this slug already exists",
+          });
+        }
+      }
+
       const data: Record<string, unknown> = {};
+      if (input.slug !== undefined) data.slug = input.slug;
       if (input.name !== undefined) data.name = input.name;
       if (input.description !== undefined) data.description = input.description;
 

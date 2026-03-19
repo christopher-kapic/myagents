@@ -791,6 +791,7 @@ function SettingsTab({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { sendFrame } = useWebSocket();
+  const [agentSlug, setAgentSlug] = useState(String(agent.slug));
   const [name, setName] = useState(String(agent.name));
   const [description, setDescription] = useState(
     agent.description ? String(agent.description) : "",
@@ -807,14 +808,25 @@ function SettingsTab({
   })();
   const currentTimeoutMin = currentTimeoutMs / 60000;
   const [timeoutMin, setTimeoutMin] = useState(currentTimeoutMin);
+  const isBuiltInType = agent.type === "hermes" || agent.type === "openclaw";
 
   const updateMutation = useMutation({
-    mutationFn: (data: { name?: string; description?: string | null }) =>
+    mutationFn: (data: { slug?: string; name?: string; description?: string | null }) =>
       orpc.agents.update.call({ id: String(agent.id), ...data }),
-    onSuccess: () => {
+    onSuccess: (result) => {
+      const updated = result as Record<string, unknown>;
+      const newSlug = String(updated.slug);
       queryClient.invalidateQueries({
-        queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
+        queryKey: orpc.agents.list.queryOptions().queryKey,
       });
+      if (newSlug !== slug) {
+        // Navigate to new slug URL
+        navigate({ to: "/agents/$slug", params: { slug: newSlug } });
+      } else {
+        queryClient.invalidateQueries({
+          queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
+        });
+      }
     },
   });
 
@@ -854,6 +866,7 @@ function SettingsTab({
 
   const handleSave = () => {
     updateMutation.mutate({
+      slug: agentSlug !== String(agent.slug) ? agentSlug : undefined,
       name: name !== String(agent.name) ? name : undefined,
       description:
         description !== (agent.description ? String(agent.description) : "")
@@ -866,7 +879,9 @@ function SettingsTab({
     rateLimitMutation.mutate({ rateLimitPerMin, circuitBreakerThreshold });
   };
 
+  const slugValid = /^[a-zA-Z0-9-]+$/.test(agentSlug) && agentSlug.length > 0;
   const hasChanges =
+    agentSlug !== String(agent.slug) ||
     name !== String(agent.name) ||
     description !== (agent.description ? String(agent.description) : "");
 
@@ -890,6 +905,31 @@ function SettingsTab({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <label htmlFor="agent-slug" className="text-sm font-medium">
+              Slug
+            </label>
+            <Input
+              id="agent-slug"
+              value={agentSlug}
+              onChange={(e) => setAgentSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+              placeholder="agent-slug"
+              className="font-mono"
+            />
+            {!slugValid && agentSlug.length > 0 && (
+              <p className="text-xs text-destructive">
+                Slug must only contain lowercase letters, numbers, and hyphens.
+              </p>
+            )}
+            {isBuiltInType && agentSlug !== String(agent.slug) && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                This is a {String(agent.type)} agent. You'll also need to update the slug in your local CLI config or agents.yaml so it re-registers with the new slug.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Used in URLs and agent-to-agent messaging. Changing this will update the agent's address.
+            </p>
+          </div>
           <div className="space-y-2">
             <label htmlFor="agent-name" className="text-sm font-medium">
               Display Name
@@ -915,7 +955,7 @@ function SettingsTab({
           <div className="flex items-center gap-2">
             <Button
               onClick={handleSave}
-              disabled={!hasChanges || updateMutation.isPending}
+              disabled={!hasChanges || !slugValid || updateMutation.isPending}
             >
               {updateMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>

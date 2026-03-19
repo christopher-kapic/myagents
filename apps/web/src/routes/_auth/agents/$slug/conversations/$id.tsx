@@ -816,6 +816,12 @@ function ConversationPage() {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={() => {
+              // On mobile, scroll to bottom when keyboard opens
+              setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+              }, 300);
+            }}
             placeholder={
               voice.isRecording ? "Listening..." : "Type a message..."
             }

@@ -269,6 +269,42 @@ agentCommand
     }
   });
 
+// ─── agent rename ───────────────────────────────────────────────────────────
+
+agentCommand
+  .command("rename <old-slug> <new-slug>")
+  .description("Rename an agent's slug (updates server and local agents.yaml)")
+  .action(async (oldSlug: string, newSlug: string) => {
+    try {
+      if (!/^[a-zA-Z0-9-]+$/.test(newSlug)) {
+        console.error("Error: new slug must match [a-zA-Z0-9-]+");
+        process.exit(1);
+      }
+
+      const client = new ApiClient();
+
+      // Find the agent by its current slug
+      const agent = await client.call<AgentInfo>("agents.get", { slug: oldSlug });
+      if (!agent?.id) {
+        console.error(`Error: Agent "${oldSlug}" not found on server.`);
+        process.exit(1);
+      }
+
+      // Update slug on server
+      await client.call("agents.update", { id: agent.id, slug: newSlug });
+      console.log(`Renamed "${oldSlug}" → "${newSlug}" on server.`);
+
+      // Update local agents.yaml if the agent is defined there
+      const updated = renameAgentInYaml(oldSlug, newSlug);
+      if (updated) {
+        console.log(`Updated slug in ~/.myagents/agents.yaml`);
+      }
+    } catch (err) {
+      console.error(`Error: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+  });
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatAgentTable(agents: AgentInfo[], showOwner = false): string {
@@ -496,6 +532,28 @@ function quoteIfNeeded(s: string): string {
     return `"${s.replace(/"/g, '\\"')}"`;
   }
   return s;
+}
+
+/**
+ * Rename an agent's slug in ~/.myagents/agents.yaml.
+ * Returns true if the agent was found and renamed.
+ */
+function renameAgentInYaml(oldSlug: string, newSlug: string): boolean {
+  if (!existsSync(AGENTS_YAML_PATH)) return false;
+
+  const content = readFileSync(AGENTS_YAML_PATH, "utf-8");
+
+  // Match slug lines like "  - slug: old-slug" or "  - slug: "old-slug""
+  const pattern = new RegExp(
+    `(^\\s*-\\s+slug:\\s*)"?${oldSlug.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"?\\s*$`,
+    "m",
+  );
+
+  if (!pattern.test(content)) return false;
+
+  const updated = content.replace(pattern, `$1${newSlug}`);
+  writeFileSync(AGENTS_YAML_PATH, updated, "utf-8");
+  return true;
 }
 
 /**
