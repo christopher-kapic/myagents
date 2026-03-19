@@ -8,6 +8,7 @@ export type FrameType = z.infer<typeof FrameType>;
 export const FrameMethod = z.enum([
   "auth",
   "message.send",
+  "message.new",
   "message.response",
   "message.chunk",
   "message.done",
@@ -47,6 +48,15 @@ export const MessageSendPayload = z.object({
   targetAgent: z.string().optional(),
 });
 export type MessageSendPayload = z.infer<typeof MessageSendPayload>;
+
+export const MessageNewPayload = z.object({
+  conversationId: z.string(),
+  messageId: z.string(),
+  content: z.string(),
+  senderType: z.string(),
+  createdAt: z.string(),
+});
+export type MessageNewPayload = z.infer<typeof MessageNewPayload>;
 
 export const MessageResponsePayload = z.object({
   conversationId: z.string(),

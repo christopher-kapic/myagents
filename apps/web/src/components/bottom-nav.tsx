@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Bot, LayoutDashboard, MessageSquare, Settings } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const navItems = [
   { to: "/dashboard" as const, label: "Dashboard", icon: LayoutDashboard },
@@ -9,6 +10,31 @@ const navItems = [
 ];
 
 export default function BottomNav() {
+  const [hidden, setHidden] = useState(false);
+
+  useEffect(() => {
+    const onFocusIn = (e: FocusEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") {
+        setHidden(true);
+      }
+    };
+    const onFocusOut = (e: FocusEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") {
+        setHidden(false);
+      }
+    };
+    document.addEventListener("focusin", onFocusIn);
+    document.addEventListener("focusout", onFocusOut);
+    return () => {
+      document.removeEventListener("focusin", onFocusIn);
+      document.removeEventListener("focusout", onFocusOut);
+    };
+  }, []);
+
+  if (hidden) return null;
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/80 backdrop-blur-lg md:hidden"
       style={{ paddingBottom: "var(--safe-area-bottom)" }}

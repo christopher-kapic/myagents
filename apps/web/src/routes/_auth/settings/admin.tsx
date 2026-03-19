@@ -8,7 +8,7 @@ import {
 } from "@myagents/ui/components/card";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { Shield } from "lucide-react";
+import { Bell, Shield } from "lucide-react";
 import { toast } from "sonner";
 
 import { orpc, queryClient } from "@/utils/orpc";
@@ -27,6 +27,22 @@ function AdminSettings() {
   const appSettings = useQuery(orpc.settings.getAll.queryOptions());
   const force2FA = appSettings.data?.force2fa === "true";
   const adminHas2FA = session.user.twoFactorEnabled === true;
+
+  const testPush = useMutation({
+    mutationFn: async () => {
+      return orpc.push.send.call({
+        title: "Test Notification",
+        body: "This is a test push notification from MyAgents.",
+        url: "/settings/admin",
+      });
+    },
+    onSuccess: (data) => {
+      toast.success(`Push notification sent to ${data.sent} of ${data.total} subscriptions`);
+    },
+    onError: (error) => {
+      toast.error(error.message || "Failed to send test notification");
+    },
+  });
 
   const updateSetting = useMutation({
     mutationFn: async ({ key, value }: { key: string; value: string }) => {
@@ -92,6 +108,33 @@ function AdminSettings() {
                 : force2FA
                   ? "Disable"
                   : "Enable"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Push Notifications
+          </CardTitle>
+          <CardDescription>Test push notification delivery to all registered devices</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-start justify-between gap-4 rounded-lg border p-4">
+            <div className="space-y-1">
+              <p className="font-medium">Test Push Notifications</p>
+              <p className="text-sm text-muted-foreground">
+                Send a test push notification to all users and all registered devices.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              disabled={testPush.isPending}
+              onClick={() => testPush.mutate()}
+            >
+              {testPush.isPending ? "Sending..." : "Send Test"}
             </Button>
           </div>
         </CardContent>

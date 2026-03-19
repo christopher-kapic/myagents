@@ -1010,6 +1010,23 @@ async function handleMessageSend(
   });
   nodeConn.ws.send(serializeFrame(forwardFrame));
 
+  // Broadcast message.new to all other client connections so other
+  // devices/browsers see the user message and the loading state
+  const clientConns = connectionRegistry.getClientConnections(userId);
+  const newMsgFrame = createEventFrame("message.new", {
+    conversationId,
+    messageId: message.id,
+    content,
+    senderType: "user",
+    createdAt: new Date().toISOString(),
+  });
+  const serializedNew = serializeFrame(newMsgFrame);
+  for (const client of clientConns) {
+    if (client.ws !== connection.ws && client.ws.readyState === 1) {
+      client.ws.send(serializedNew);
+    }
+  }
+
   // Respond to sender with conversation and message IDs
   return createResponseFrame(
     "message.send",

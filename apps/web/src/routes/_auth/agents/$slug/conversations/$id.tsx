@@ -104,8 +104,14 @@ function ConversationPage() {
         nextCursor: string | null;
       };
       // messages.list returns desc order, reverse for display (oldest first)
-      setLocalMessages(data.items.slice().reverse());
+      const msgs = data.items.slice().reverse();
+      setLocalMessages(msgs);
       setNextCursor(data.nextCursor);
+      // If the last message is from the user, the agent is likely still working
+      const last = msgs[msgs.length - 1];
+      if (last && last.senderType === "user") {
+        setSending(true);
+      }
     }
   }, [messagesQuery.data]);
 
@@ -114,9 +120,38 @@ function ConversationPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [localMessages]);
 
-  // Listen for WebSocket events (streaming chunks, done, errors)
+  // Listen for WebSocket events (streaming chunks, done, errors, cross-device sync)
   useEffect(() => {
     const unsubscribe = subscribe((frame) => {
+      // Handle message.new — a message sent from another device/browser
+      if (frame.method === "message.new") {
+        const payload = frame.payload as {
+          conversationId?: string;
+          messageId?: string;
+          content?: string;
+          senderType?: string;
+          createdAt?: string;
+        };
+        if (payload?.conversationId === id && payload.content) {
+          setLocalMessages((prev) => {
+            // Avoid duplicates
+            if (prev.some((m) => m.id === payload.messageId)) return prev;
+            return [
+              ...prev,
+              {
+                id: payload.messageId ?? `remote-${Date.now()}`,
+                content: payload.content!,
+                senderType: payload.senderType ?? "user",
+                createdAt: payload.createdAt ?? new Date().toISOString(),
+              },
+            ];
+          });
+          if (payload.senderType === "user") {
+            setSending(true);
+          }
+        }
+      }
+
       // Handle streaming chunks — append to pending agent message
       if (frame.method === "message.chunk") {
         const payload = frame.payload as {
@@ -548,7 +583,7 @@ function ConversationPage() {
               voice.isRecording ? "Listening..." : "Type a message..."
             }
             rows={1}
-            className="flex-1 resize-none rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring min-h-[40px] max-h-[120px]"
+            className="flex-1 resize-none rounded-lg border bg-background px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-ring min-h-[40px] max-h-[120px]"
             style={{
               height: "auto",
               overflow: "hidden",
