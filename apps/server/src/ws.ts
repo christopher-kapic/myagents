@@ -199,6 +199,12 @@ export async function authenticateWebSocket(
  */
 async function handleNodeDisconnect(nodeId: string): Promise<void> {
   try {
+    // If the node has already reconnected (new WebSocket with the same nodeId),
+    // skip the disconnect logic to avoid clobbering the fresh connection's state.
+    if (nodeConnections.has(nodeId)) {
+      return;
+    }
+
     await prisma.node.update({
       where: { id: nodeId },
       data: { status: "offline", lastSeen: new Date() },
@@ -380,7 +386,7 @@ async function handleAgentRegister(
     console.log(`[WS] agent registered: ${agent.slug} (${agent.id}) on node ${connection.nodeId}`);
 
     // Log the online transition for uptime tracking
-    void prisma.agentUptimeLog.create({
+    await prisma.agentUptimeLog.create({
       data: { agentId: agent.id, status: "online" },
     });
 

@@ -203,8 +203,11 @@ async function calculateUptimePercent(
     lastStatus = String(log.status);
   }
 
-  // Account for time from last log to end of period
-  if (lastStatus === "online") {
+  // Account for time from last log to end of period.
+  // Use currentStatus for the trailing period since it reflects the agent's
+  // actual state right now. If a transition log was lost (fire-and-forget
+  // failure or race condition), this prevents showing 0% for a connected agent.
+  if (currentStatus === "online") {
     onlineMs += endDate.getTime() - lastTime;
   }
 
