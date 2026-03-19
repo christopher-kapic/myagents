@@ -11,8 +11,8 @@ interface PushSubscription {
 let initialized = false;
 
 async function getWebPush() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const webpush = (await import("web-push")) as {
+  const mod = await import("web-push");
+  const webpush = (mod.default ?? mod) as {
     setVapidDetails(subject: string, publicKey: string, privateKey: string): void;
     sendNotification(
       subscription: PushSubscription,

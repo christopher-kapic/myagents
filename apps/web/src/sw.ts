@@ -92,21 +92,7 @@ self.addEventListener("pushsubscriptionchange", ((event: Event) => {
       await fetch("/rpc/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          endpoint: newSubscription.endpoint,
-          keys: {
-            p256dh: btoa(
-              String.fromCharCode(
-                ...new Uint8Array(newSubscription.getKey("p256dh")!),
-              ),
-            ),
-            auth: btoa(
-              String.fromCharCode(
-                ...new Uint8Array(newSubscription.getKey("auth")!),
-              ),
-            ),
-          },
-        }),
+        body: JSON.stringify(newSubscription.toJSON()),
       });
     })(),
   );
