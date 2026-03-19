@@ -43,7 +43,7 @@ function ConversationsLayout() {
   const agentId = agent ? String(agent.id) : "";
 
   return (
-    <div className="flex h-[calc(100vh-4rem)]">
+    <div className="flex h-full">
       {/* Desktop sidebar */}
       <div className="hidden md:flex md:w-72 lg:w-80 md:shrink-0 md:flex-col md:border-r">
         {agentId ? (

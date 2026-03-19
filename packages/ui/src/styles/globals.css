@@ -173,6 +173,15 @@
                200ms cubic-bezier(0.4, 0, 0.2, 1) both slide-from-right;
   }
 
+  /* Hide scrollbar for horizontal scroll containers */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
   /* Reduced motion: instant transitions */
   @media (prefers-reduced-motion: reduce) {
     ::view-transition-old(page),

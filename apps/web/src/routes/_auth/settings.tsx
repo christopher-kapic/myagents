@@ -23,8 +23,8 @@ function SettingsLayout() {
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
       <div className="flex flex-col gap-6 md:flex-row md:gap-8">
-        <nav className="w-full md:w-48 flex-shrink-0">
-          <div className="flex flex-row gap-1 md:flex-col">
+        <nav className="w-full md:w-48 flex-shrink-0 overflow-x-auto md:overflow-x-visible -mx-4 px-4 md:mx-0 md:px-0 scrollbar-hide">
+          <div className="flex flex-row gap-1 md:flex-col flex-nowrap min-w-max md:min-w-0">
             {navItems.map((item) => (
               <Link
                 key={item.to}

@@ -31,11 +31,15 @@ export function useWebSocket(): UseWebSocketReturn {
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
+    const url = getWsUrl();
+    console.log("[WS] connecting to", url);
+
     try {
-      const ws = new WebSocket(getWsUrl());
+      const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
+        console.log("[WS] connected");
         if (mountedRef.current) setConnected(true);
       };
 
@@ -48,7 +52,8 @@ export function useWebSocket(): UseWebSocketReturn {
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        console.log("[WS] closed", { code: event.code, reason: event.reason, wasClean: event.wasClean });
         if (mountedRef.current) {
           setConnected(false);
           // Reconnect after 3s
@@ -58,11 +63,12 @@ export function useWebSocket(): UseWebSocketReturn {
         }
       };
 
-      ws.onerror = () => {
+      ws.onerror = (event) => {
+        console.error("[WS] error", event);
         ws.close();
       };
-    } catch {
-      // Will retry via onclose
+    } catch (err) {
+      console.error("[WS] failed to create WebSocket", err);
     }
   }, []);
 

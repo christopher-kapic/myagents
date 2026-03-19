@@ -18,9 +18,9 @@ import { Route as AuthConversationsRouteImport } from './routes/_auth/conversati
 import { Route as AuthAgentsRouteImport } from './routes/_auth/agents'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
 import { Route as AuthAgentsIndexRouteImport } from './routes/_auth/agents/index'
+import { Route as AuthSettingsVoiceRouteImport } from './routes/_auth/settings/voice'
 import { Route as AuthSettingsSecurityRouteImport } from './routes/_auth/settings/security'
 import { Route as AuthSettingsApiKeysRouteImport } from './routes/_auth/settings/api-keys'
-import { Route as AuthSettingsVoiceRouteImport } from './routes/_auth/settings/voice'
 import { Route as AuthSettingsAdminRouteImport } from './routes/_auth/settings/admin'
 import { Route as AuthAgentsSlugRouteImport } from './routes/_auth/agents/$slug'
 import { Route as AuthAgentsSlugIndexRouteImport } from './routes/_auth/agents/$slug/index'
@@ -71,6 +71,11 @@ const AuthAgentsIndexRoute = AuthAgentsIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthAgentsRoute,
 } as any)
+const AuthSettingsVoiceRoute = AuthSettingsVoiceRouteImport.update({
+  id: '/voice',
+  path: '/voice',
+  getParentRoute: () => AuthSettingsRoute,
+} as any)
 const AuthSettingsSecurityRoute = AuthSettingsSecurityRouteImport.update({
   id: '/security',
   path: '/security',
@@ -79,11 +84,6 @@ const AuthSettingsSecurityRoute = AuthSettingsSecurityRouteImport.update({
 const AuthSettingsApiKeysRoute = AuthSettingsApiKeysRouteImport.update({
   id: '/api-keys',
   path: '/api-keys',
-  getParentRoute: () => AuthSettingsRoute,
-} as any)
-const AuthSettingsVoiceRoute = AuthSettingsVoiceRouteImport.update({
-  id: '/voice',
-  path: '/voice',
   getParentRoute: () => AuthSettingsRoute,
 } as any)
 const AuthSettingsAdminRoute = AuthSettingsAdminRouteImport.update({
@@ -293,6 +293,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAgentsIndexRouteImport
       parentRoute: typeof AuthAgentsRoute
     }
+    '/_auth/settings/voice': {
+      id: '/_auth/settings/voice'
+      path: '/voice'
+      fullPath: '/settings/voice'
+      preLoaderRoute: typeof AuthSettingsVoiceRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
     '/_auth/settings/security': {
       id: '/_auth/settings/security'
       path: '/security'
@@ -305,13 +312,6 @@ declare module '@tanstack/react-router' {
       path: '/api-keys'
       fullPath: '/settings/api-keys'
       preLoaderRoute: typeof AuthSettingsApiKeysRouteImport
-      parentRoute: typeof AuthSettingsRoute
-    }
-    '/_auth/settings/voice': {
-      id: '/_auth/settings/voice'
-      path: '/voice'
-      fullPath: '/settings/voice'
-      preLoaderRoute: typeof AuthSettingsVoiceRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
     '/_auth/settings/admin': {

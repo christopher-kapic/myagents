@@ -55,7 +55,7 @@ function RootComponent() {
         storageKey="vite-ui-theme"
       >
         <div
-          className="grid grid-rows-[auto_1fr] h-svh md:pb-0 pb-14"
+          className="grid grid-rows-[auto_1fr] h-svh pb-[calc(3.5rem+var(--safe-area-bottom))] md:pb-0"
           style={{
             paddingTop: "var(--safe-area-top)",
             paddingLeft: "var(--safe-area-left)",
