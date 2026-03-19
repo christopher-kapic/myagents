@@ -114,7 +114,7 @@ const AuthAgentsSlugConversationsIdRoute =
     getParentRoute: () => AuthAgentsSlugConversationsRoute,
   } as any)
 
-export interface FileRoutesByFullPath {
+interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/agents': typeof AuthAgentsRouteWithChildren
@@ -132,7 +132,7 @@ export interface FileRoutesByFullPath {
   '/agents/$slug/': typeof AuthAgentsSlugIndexRoute
   '/agents/$slug/conversations/$id': typeof AuthAgentsSlugConversationsIdRoute
 }
-export interface FileRoutesByTo {
+interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/conversations': typeof AuthConversationsRoute
@@ -147,7 +147,7 @@ export interface FileRoutesByTo {
   '/agents/$slug': typeof AuthAgentsSlugIndexRoute
   '/agents/$slug/conversations/$id': typeof AuthAgentsSlugConversationsIdRoute
 }
-export interface FileRoutesById {
+interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteWithChildren
@@ -167,7 +167,7 @@ export interface FileRoutesById {
   '/_auth/agents/$slug/': typeof AuthAgentsSlugIndexRoute
   '/_auth/agents/$slug/conversations/$id': typeof AuthAgentsSlugConversationsIdRoute
 }
-export interface FileRouteTypes {
+interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
@@ -222,7 +222,7 @@ export interface FileRouteTypes {
     | '/_auth/agents/$slug/conversations/$id'
   fileRoutesById: FileRoutesById
 }
-export interface RootRouteChildren {
+interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRouteWithChildren
   LoginRoute: typeof LoginRoute

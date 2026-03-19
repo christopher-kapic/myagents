@@ -12,7 +12,7 @@ interface SpeechRecognitionErrorEvent {
   message?: string;
 }
 
-export interface UseWebSpeechReturn {
+interface UseWebSpeechReturn {
   /** Whether the browser supports SpeechRecognition */
   isSupported: boolean;
   /** Whether currently listening */

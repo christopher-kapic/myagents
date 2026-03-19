@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-export interface WhisperProgressItem {
+interface WhisperProgressItem {
   file: string;
   loaded: number;
   progress: number;
@@ -11,12 +11,12 @@ export interface WhisperProgressItem {
   status: string;
 }
 
-export interface WhisperChunk {
+interface WhisperChunk {
   text: string;
   timestamp: [number, number | null];
 }
 
-export interface WhisperTranscript {
+interface WhisperTranscript {
   text: string;
   chunks: WhisperChunk[];
   tps?: number;
@@ -31,16 +31,16 @@ export type WhisperModel =
   | "onnx-community/whisper-small.en"
   | "onnx-community/whisper-large-v3-turbo";
 
-export type WhisperBackend = "webgpu" | "wasm" | "none";
+type WhisperBackend = "webgpu" | "wasm" | "none";
 
 export type SpeechEngine = "whisper" | "web-speech";
 
-export interface UseWhisperOptions {
+interface UseWhisperOptions {
   model?: WhisperModel;
   language?: string;
 }
 
-export interface UseWhisperReturn {
+interface UseWhisperReturn {
   /** Whether the worker is currently transcribing */
   isBusy: boolean;
   /** Whether the model is being downloaded/loaded */
@@ -78,7 +78,7 @@ const STORAGE_KEY_LANGUAGE = "whisper-language";
 const STORAGE_KEY_ENGINE = "speech-engine";
 
 /** Read persisted whisper model from localStorage */
-export function getStoredWhisperModel(): WhisperModel {
+function getStoredWhisperModel(): WhisperModel {
   try {
     const stored = localStorage.getItem(STORAGE_KEY_MODEL);
     if (stored && WHISPER_MODELS.some((m) => m.id === stored)) {
@@ -91,7 +91,7 @@ export function getStoredWhisperModel(): WhisperModel {
 }
 
 /** Read persisted whisper language from localStorage */
-export function getStoredWhisperLanguage(): string {
+function getStoredWhisperLanguage(): string {
   try {
     return localStorage.getItem(STORAGE_KEY_LANGUAGE) ?? "en";
   } catch {
@@ -100,7 +100,7 @@ export function getStoredWhisperLanguage(): string {
 }
 
 /** Persist whisper model to localStorage */
-export function storeWhisperModel(model: WhisperModel): void {
+function storeWhisperModel(model: WhisperModel): void {
   try {
     localStorage.setItem(STORAGE_KEY_MODEL, model);
   } catch {
@@ -109,7 +109,7 @@ export function storeWhisperModel(model: WhisperModel): void {
 }
 
 /** Persist whisper language to localStorage */
-export function storeWhisperLanguage(language: string): void {
+function storeWhisperLanguage(language: string): void {
   try {
     localStorage.setItem(STORAGE_KEY_LANGUAGE, language);
   } catch {

@@ -5,9 +5,9 @@ import { useWhisper, type SpeechEngine, getStoredSpeechEngine, storeSpeechEngine
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-export type RecordingMode = "idle" | "recording" | "processing";
+type RecordingMode = "idle" | "recording" | "processing";
 
-export interface UseVoiceRecordingReturn {
+interface UseVoiceRecordingReturn {
   /** Current recording state */
   mode: RecordingMode;
   /** Whether currently recording audio */
