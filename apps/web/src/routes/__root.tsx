@@ -11,6 +11,7 @@ import { useState } from "react";
 import BottomNav from "@/components/bottom-nav";
 import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
+import { useAppUpdate } from "@/hooks/use-app-update";
 import { link, orpc } from "@/utils/orpc";
 
 import "../index.css";
@@ -42,6 +43,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 });
 
 function RootComponent() {
+  useAppUpdate();
   const [client] = useState<AppRouterClient>(() => createORPCClient(link));
   const [orpcUtils] = useState(() => createTanstackQueryUtils(client));
 

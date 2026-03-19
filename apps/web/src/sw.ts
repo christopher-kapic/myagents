@@ -13,11 +13,17 @@ precacheAndRoute(self.__WB_MANIFEST);
 
 const OFFLINE_URL = "/offline.html";
 
-// Cache the offline page on install
+// Cache the offline page on install, then activate immediately
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open("offline-v1").then((cache) => cache.add(OFFLINE_URL)),
   );
+  self.skipWaiting();
+});
+
+// Claim all clients so the new SW takes effect without a second navigation
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
 });
 
 // Serve offline page for failed navigation requests
