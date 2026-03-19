@@ -20,6 +20,7 @@ import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/i
 import { Route as AuthAgentsIndexRouteImport } from './routes/_auth/agents/index'
 import { Route as AuthSettingsVoiceRouteImport } from './routes/_auth/settings/voice'
 import { Route as AuthSettingsSecurityRouteImport } from './routes/_auth/settings/security'
+import { Route as AuthSettingsNotificationsRouteImport } from './routes/_auth/settings/notifications'
 import { Route as AuthSettingsApiKeysRouteImport } from './routes/_auth/settings/api-keys'
 import { Route as AuthSettingsAdminRouteImport } from './routes/_auth/settings/admin'
 import { Route as AuthAgentsSlugRouteImport } from './routes/_auth/agents/$slug'
@@ -81,6 +82,12 @@ const AuthSettingsSecurityRoute = AuthSettingsSecurityRouteImport.update({
   path: '/security',
   getParentRoute: () => AuthSettingsRoute,
 } as any)
+const AuthSettingsNotificationsRoute =
+  AuthSettingsNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => AuthSettingsRoute,
+  } as any)
 const AuthSettingsApiKeysRoute = AuthSettingsApiKeysRouteImport.update({
   id: '/api-keys',
   path: '/api-keys',
@@ -114,7 +121,7 @@ const AuthAgentsSlugConversationsIdRoute =
     getParentRoute: () => AuthAgentsSlugConversationsRoute,
   } as any)
 
-interface FileRoutesByFullPath {
+export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/agents': typeof AuthAgentsRouteWithChildren
@@ -124,6 +131,7 @@ interface FileRoutesByFullPath {
   '/agents/$slug': typeof AuthAgentsSlugRouteWithChildren
   '/settings/admin': typeof AuthSettingsAdminRoute
   '/settings/api-keys': typeof AuthSettingsApiKeysRoute
+  '/settings/notifications': typeof AuthSettingsNotificationsRoute
   '/settings/security': typeof AuthSettingsSecurityRoute
   '/settings/voice': typeof AuthSettingsVoiceRoute
   '/agents/': typeof AuthAgentsIndexRoute
@@ -132,13 +140,14 @@ interface FileRoutesByFullPath {
   '/agents/$slug/': typeof AuthAgentsSlugIndexRoute
   '/agents/$slug/conversations/$id': typeof AuthAgentsSlugConversationsIdRoute
 }
-interface FileRoutesByTo {
+export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/conversations': typeof AuthConversationsRoute
   '/dashboard': typeof AuthDashboardRoute
   '/settings/admin': typeof AuthSettingsAdminRoute
   '/settings/api-keys': typeof AuthSettingsApiKeysRoute
+  '/settings/notifications': typeof AuthSettingsNotificationsRoute
   '/settings/security': typeof AuthSettingsSecurityRoute
   '/settings/voice': typeof AuthSettingsVoiceRoute
   '/agents': typeof AuthAgentsIndexRoute
@@ -147,7 +156,7 @@ interface FileRoutesByTo {
   '/agents/$slug': typeof AuthAgentsSlugIndexRoute
   '/agents/$slug/conversations/$id': typeof AuthAgentsSlugConversationsIdRoute
 }
-interface FileRoutesById {
+export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_auth': typeof AuthRouteWithChildren
@@ -159,6 +168,7 @@ interface FileRoutesById {
   '/_auth/agents/$slug': typeof AuthAgentsSlugRouteWithChildren
   '/_auth/settings/admin': typeof AuthSettingsAdminRoute
   '/_auth/settings/api-keys': typeof AuthSettingsApiKeysRoute
+  '/_auth/settings/notifications': typeof AuthSettingsNotificationsRoute
   '/_auth/settings/security': typeof AuthSettingsSecurityRoute
   '/_auth/settings/voice': typeof AuthSettingsVoiceRoute
   '/_auth/agents/': typeof AuthAgentsIndexRoute
@@ -167,7 +177,7 @@ interface FileRoutesById {
   '/_auth/agents/$slug/': typeof AuthAgentsSlugIndexRoute
   '/_auth/agents/$slug/conversations/$id': typeof AuthAgentsSlugConversationsIdRoute
 }
-interface FileRouteTypes {
+export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
@@ -179,6 +189,7 @@ interface FileRouteTypes {
     | '/agents/$slug'
     | '/settings/admin'
     | '/settings/api-keys'
+    | '/settings/notifications'
     | '/settings/security'
     | '/settings/voice'
     | '/agents/'
@@ -194,6 +205,7 @@ interface FileRouteTypes {
     | '/dashboard'
     | '/settings/admin'
     | '/settings/api-keys'
+    | '/settings/notifications'
     | '/settings/security'
     | '/settings/voice'
     | '/agents'
@@ -213,6 +225,7 @@ interface FileRouteTypes {
     | '/_auth/agents/$slug'
     | '/_auth/settings/admin'
     | '/_auth/settings/api-keys'
+    | '/_auth/settings/notifications'
     | '/_auth/settings/security'
     | '/_auth/settings/voice'
     | '/_auth/agents/'
@@ -222,7 +235,7 @@ interface FileRouteTypes {
     | '/_auth/agents/$slug/conversations/$id'
   fileRoutesById: FileRoutesById
 }
-interface RootRouteChildren {
+export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRouteWithChildren
   LoginRoute: typeof LoginRoute
@@ -305,6 +318,13 @@ declare module '@tanstack/react-router' {
       path: '/security'
       fullPath: '/settings/security'
       preLoaderRoute: typeof AuthSettingsSecurityRouteImport
+      parentRoute: typeof AuthSettingsRoute
+    }
+    '/_auth/settings/notifications': {
+      id: '/_auth/settings/notifications'
+      path: '/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof AuthSettingsNotificationsRouteImport
       parentRoute: typeof AuthSettingsRoute
     }
     '/_auth/settings/api-keys': {
@@ -398,6 +418,7 @@ const AuthAgentsRouteWithChildren = AuthAgentsRoute._addFileChildren(
 interface AuthSettingsRouteChildren {
   AuthSettingsAdminRoute: typeof AuthSettingsAdminRoute
   AuthSettingsApiKeysRoute: typeof AuthSettingsApiKeysRoute
+  AuthSettingsNotificationsRoute: typeof AuthSettingsNotificationsRoute
   AuthSettingsSecurityRoute: typeof AuthSettingsSecurityRoute
   AuthSettingsVoiceRoute: typeof AuthSettingsVoiceRoute
   AuthSettingsIndexRoute: typeof AuthSettingsIndexRoute
@@ -406,6 +427,7 @@ interface AuthSettingsRouteChildren {
 const AuthSettingsRouteChildren: AuthSettingsRouteChildren = {
   AuthSettingsAdminRoute: AuthSettingsAdminRoute,
   AuthSettingsApiKeysRoute: AuthSettingsApiKeysRoute,
+  AuthSettingsNotificationsRoute: AuthSettingsNotificationsRoute,
   AuthSettingsSecurityRoute: AuthSettingsSecurityRoute,
   AuthSettingsVoiceRoute: AuthSettingsVoiceRoute,
   AuthSettingsIndexRoute: AuthSettingsIndexRoute,
