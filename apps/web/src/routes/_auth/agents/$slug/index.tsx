@@ -801,11 +801,12 @@ function SettingsTab({
   const [circuitBreakerThreshold, setCircuitBreakerThreshold] = useState(
     Number(agent.circuitBreakerThreshold) || 10,
   );
-  const currentTimeout = (() => {
+  const currentTimeoutMs = (() => {
     const config = agent.adapterConfig as Record<string, unknown> | null;
     return (config?.timeout as number) ?? 120000;
   })();
-  const [timeout, setTimeoutValue] = useState(currentTimeout);
+  const currentTimeoutMin = currentTimeoutMs / 60000;
+  const [timeoutMin, setTimeoutMin] = useState(currentTimeoutMin);
 
   const updateMutation = useMutation({
     mutationFn: (data: { name?: string; description?: string | null }) =>
@@ -870,10 +871,10 @@ function SettingsTab({
     description !== (agent.description ? String(agent.description) : "");
 
   const handleSaveTimeout = () => {
-    timeoutMutation.mutate({ timeout });
+    timeoutMutation.mutate({ timeout: Math.round(timeoutMin * 60000) });
   };
 
-  const hasTimeoutChanges = timeout !== currentTimeout;
+  const hasTimeoutChanges = timeoutMin !== currentTimeoutMin;
 
   const hasRateLimitChanges =
     rateLimitPerMin !== (Number(agent.rateLimitPerMin) || 60) ||
@@ -1094,20 +1095,19 @@ function SettingsTab({
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="timeout" className="text-sm font-medium">
-              Timeout (milliseconds)
+              Timeout (minutes)
             </label>
             <Input
               id="timeout"
               type="number"
-              min={1000}
-              max={600000}
-              step={1000}
-              value={timeout}
-              onChange={(e) => setTimeoutValue(Number(e.target.value) || 1000)}
+              min={0.5}
+              max={10}
+              step={0.5}
+              value={timeoutMin}
+              onChange={(e) => setTimeoutMin(Number(e.target.value) || 0.5)}
             />
             <p className="text-xs text-muted-foreground">
-              Value between 1,000ms (1s) and 600,000ms (10min). Default:
-              120,000ms (2 minutes).
+              Value between 0.5 and 10 minutes. Default: 2 minutes.
             </p>
           </div>
           <div className="flex items-center gap-2">
