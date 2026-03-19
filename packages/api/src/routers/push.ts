@@ -77,9 +77,7 @@ export const pushRouter = {
               payload,
             );
           } catch (err: any) {
-            if (err.statusCode === 410 || err.statusCode === 404) {
-              await prisma.pushSubscription.delete({ where: { id: sub.id } });
-            }
+            await prisma.pushSubscription.delete({ where: { id: sub.id } });
             throw err;
           }
         }),
