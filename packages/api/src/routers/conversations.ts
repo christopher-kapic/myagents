@@ -476,6 +476,104 @@ export const conversationsRouter = {
     }),
 };
 
+export const queuedMessagesRouter = {
+  list: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.string(),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: input.conversationId },
+        select: { userId: true },
+      });
+
+      if (!conversation || (!isAdmin(context) && conversation.userId !== userId)) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Conversation not found",
+        });
+      }
+
+      const items = await prisma.queuedMessage.findMany({
+        where: { conversationId: input.conversationId },
+        select: { id: true, content: true, position: true, createdAt: true },
+        orderBy: { position: "asc" },
+      });
+
+      return items;
+    }),
+
+  create: protectedProcedure
+    .input(
+      z.object({
+        conversationId: z.string(),
+        content: z.string().min(1),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: input.conversationId },
+        select: { userId: true },
+      });
+
+      if (!conversation || (!isAdmin(context) && conversation.userId !== userId)) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Conversation not found",
+        });
+      }
+
+      // Get the max position for this conversation
+      const last = await prisma.queuedMessage.findFirst({
+        where: { conversationId: input.conversationId },
+        orderBy: { position: "desc" },
+        select: { position: true },
+      });
+
+      const item = await prisma.queuedMessage.create({
+        data: {
+          conversationId: input.conversationId,
+          content: input.content,
+          position: (last?.position ?? -1) + 1,
+        },
+        select: { id: true, content: true, position: true, createdAt: true },
+      });
+
+      return item;
+    }),
+
+  delete: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+
+      const item = await prisma.queuedMessage.findUnique({
+        where: { id: input.id },
+        select: { conversation: { select: { userId: true } } },
+      });
+
+      if (!item || (!isAdmin(context) && item.conversation.userId !== userId)) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Queued message not found",
+        });
+      }
+
+      await prisma.queuedMessage.delete({
+        where: { id: input.id },
+      });
+
+      return { success: true };
+    }),
+};
+
 export const messagesRouter = {
   list: protectedProcedure
     .input(

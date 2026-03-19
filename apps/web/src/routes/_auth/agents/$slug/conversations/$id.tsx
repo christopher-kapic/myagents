@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Bot,
   Check,
+  Clock,
   Download,
   FileJson,
   FileText,
@@ -73,6 +74,41 @@ function ConversationPage() {
   const [olderMessages, setOlderMessages] = useState<ChatMessage[]>([]);
   const voice = useVoiceRecording();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Server-backed message queue
+  const queueQuery = useQuery(
+    orpc.queuedMessages.list.queryOptions({ input: { conversationId: id } }),
+  );
+  const queuedMessages = (queueQuery.data ?? []) as unknown as Array<{
+    id: string;
+    content: string;
+    position: number;
+    createdAt: string;
+  }>;
+
+  const queueMutation = useMutation({
+    mutationFn: (content: string) =>
+      orpc.queuedMessages.create.call({ conversationId: id, content }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.queuedMessages.list.queryOptions({
+          input: { conversationId: id },
+        }).queryKey,
+      });
+    },
+  });
+
+  const deleteQueueMutation = useMutation({
+    mutationFn: (queuedId: string) =>
+      orpc.queuedMessages.delete.call({ id: queuedId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.queuedMessages.list.queryOptions({
+          input: { conversationId: id },
+        }).queryKey,
+      });
+    },
+  });
 
   // Insert transcribed text into input
   useEffect(() => {
@@ -300,6 +336,20 @@ function ConversationPage() {
           setSending(false);
         }
       }
+
+      // Handle queue.dequeued — server processed a queued message
+      if (frame.method === "queue.dequeued") {
+        const payload = frame.payload as {
+          conversationId?: string;
+        };
+        if (payload?.conversationId === id) {
+          queryClient.invalidateQueries({
+            queryKey: orpc.queuedMessages.list.queryOptions({
+              input: { conversationId: id },
+            }).queryKey,
+          });
+        }
+      }
     });
 
     return unsubscribe;
@@ -328,29 +378,43 @@ function ConversationPage() {
     [conversationQuery.data, localMessages, slug],
   );
 
-  // Send message via WebSocket
+  // Send a message immediately (used internally)
+  const sendMessage = useCallback(
+    (content: string) => {
+      const userMsg: ChatMessage = {
+        id: `local-${Date.now()}`,
+        content,
+        senderType: "user",
+        createdAt: new Date().toISOString(),
+      };
+      setLocalMessages((prev) => [...prev, userMsg]);
+      setSending(true);
+      sendFrame("message.send", {
+        conversationId: id,
+        agentSlug: slug,
+        content,
+      });
+    },
+    [id, slug, sendFrame],
+  );
+
+  // Send message or queue it if already sending
   const handleSend = useCallback(() => {
     const content = inputValue.trim();
-    if (!content || sending) return;
+    if (!content) return;
 
-    // Add user message to local state immediately
-    const userMsg: ChatMessage = {
-      id: `local-${Date.now()}`,
-      content,
-      senderType: "user",
-      createdAt: new Date().toISOString(),
-    };
-    setLocalMessages((prev) => [...prev, userMsg]);
     setInputValue("");
-    setSending(true);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
 
-    // Send via WebSocket
-    sendFrame("message.send", {
-      conversationId: id,
-      agentSlug: slug,
-      content,
-    });
-  }, [inputValue, sending, id, slug, sendFrame]);
+    if (sending) {
+      // Queue the message server-side
+      queueMutation.mutate(content);
+    } else {
+      sendMessage(content);
+    }
+  }, [inputValue, sending, sendMessage, queueMutation]);
 
   // Handle Enter key
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -620,6 +684,33 @@ function ConversationPage() {
             </div>
           )}
 
+        {/* Queued messages */}
+        {queuedMessages.map((qm) => (
+          <div key={qm.id} className="flex items-start gap-3 justify-end">
+            <div className="flex flex-col items-end max-w-[80%]">
+              <div className="rounded-2xl rounded-tr-sm bg-primary/50 text-primary-foreground px-4 py-2 relative group">
+                <p className="text-sm whitespace-pre-wrap break-words opacity-70">
+                  {qm.content}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => deleteQueueMutation.mutate(qm.id)}
+                  className="absolute -top-2 -left-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center md:hidden md:group-hover:flex"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+              <span className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Queued
+              </span>
+            </div>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 shrink-0">
+              <User className="h-4 w-4 text-primary" />
+            </div>
+          </div>
+        ))}
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -758,7 +849,7 @@ function ConversationPage() {
           <Button
             size="sm"
             onClick={handleSend}
-            disabled={!inputValue.trim() || sending}
+            disabled={!inputValue.trim()}
             className="h-10 w-10 p-0 shrink-0"
           >
             <Send className="h-4 w-4" />

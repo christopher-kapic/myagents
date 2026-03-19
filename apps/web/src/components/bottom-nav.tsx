@@ -10,32 +10,21 @@ const navItems = [
 ];
 
 export default function BottomNav() {
-  const [hidden, setHidden] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
+  // Detect input focus via DOM events
   useEffect(() => {
-    const vv = window.visualViewport;
-
-    // Use visualViewport API to detect virtual keyboard (most reliable on iOS)
-    if (vv) {
-      const onResize = () => {
-        const keyboardOpen = vv.height < window.innerHeight * 0.8;
-        setHidden(keyboardOpen);
-      };
-      vv.addEventListener("resize", onResize);
-      return () => vv.removeEventListener("resize", onResize);
-    }
-
-    // Fallback: focus-based detection
     const onFocusIn = (e: FocusEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") {
-        setHidden(true);
+        setInputFocused(true);
       }
     };
     const onFocusOut = (e: FocusEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") {
-        setHidden(false);
+        setInputFocused(false);
       }
     };
     document.addEventListener("focusin", onFocusIn);
@@ -45,6 +34,19 @@ export default function BottomNav() {
       document.removeEventListener("focusout", onFocusOut);
     };
   }, []);
+
+  // Detect virtual keyboard via visualViewport (reliable on iOS)
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      setKeyboardOpen(vv.height < window.innerHeight * 0.8);
+    };
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, []);
+
+  const hidden = inputFocused || keyboardOpen;
 
   if (hidden) return null;
 

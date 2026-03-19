@@ -29,6 +29,9 @@ function DashboardPage() {
 
   const handleRefresh = useCallback(async () => {
     await queryClient.invalidateQueries();
+    // Check for new PWA deployment
+    const reg = await navigator.serviceWorker?.getRegistration();
+    reg?.update();
   }, []);
 
   return (

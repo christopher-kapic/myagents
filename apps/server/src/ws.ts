@@ -1417,6 +1417,104 @@ async function handleMessageChunk(
 }
 
 /**
+ * Process the next queued message for a conversation after an agent response completes.
+ */
+async function processNextQueuedMessage(
+  conversationId: string,
+  userId: string,
+  agentId: string,
+) {
+  try {
+    // Find the next queued message (lowest position)
+    const next = await prisma.queuedMessage.findFirst({
+      where: { conversationId },
+      orderBy: { position: "asc" },
+    });
+    if (!next) return;
+
+    // Delete it from the queue
+    await prisma.queuedMessage.delete({ where: { id: next.id } });
+
+    // Look up the agent to get slug and node connection
+    const agent = await prisma.agent.findUnique({
+      where: { id: agentId },
+      select: { slug: true, nodeId: true, rateLimitPerMin: true, id: true },
+    });
+    if (!agent) return;
+
+    const nodeConn = connectionRegistry.getNodeConnection(agent.nodeId);
+    if (!nodeConn || nodeConn.ws.readyState !== 1) return;
+
+    // Rate limit check
+    const rateCheck = checkRateLimit(agent.id, agent.rateLimitPerMin);
+    if (!rateCheck.allowed) return;
+
+    // Fetch recent message history for context
+    const recentMessages = await prisma.message.findMany({
+      where: { conversationId },
+      select: { content: true, senderType: true },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    });
+    const history = recentMessages.reverse().map((m) => ({
+      role: String(m.senderType) === "user" ? "user" as const : "agent" as const,
+      content: m.content,
+    }));
+
+    // Save user message to DB
+    const message = await prisma.message.create({
+      data: {
+        conversationId,
+        senderType: "user",
+        senderId: userId,
+        content: next.content,
+      },
+      select: { id: true },
+    });
+
+    // Forward to CLI node
+    const forwardFrame = createRequestFrame("message.send", {
+      conversationId,
+      agentSlug: agent.slug,
+      content: next.content,
+      messageId: message.id,
+      history,
+    });
+    nodeConn.ws.send(serializeFrame(forwardFrame));
+
+    // Broadcast message.new to user's client connections
+    const clientConns = connectionRegistry.getClientConnections(userId);
+    const newMsgFrame = createEventFrame("message.new", {
+      conversationId,
+      messageId: message.id,
+      content: next.content,
+      senderType: "user",
+      createdAt: new Date().toISOString(),
+    });
+    const serializedNew = serializeFrame(newMsgFrame);
+    for (const client of clientConns) {
+      if (client.ws.readyState === 1) {
+        client.ws.send(serializedNew);
+      }
+    }
+
+    // Notify clients that the queued message was consumed
+    const queueUpdateFrame = createEventFrame("queue.dequeued", {
+      conversationId,
+      queuedMessageId: next.id,
+    });
+    const serializedQueue = serializeFrame(queueUpdateFrame);
+    for (const client of clientConns) {
+      if (client.ws.readyState === 1) {
+        client.ws.send(serializedQueue);
+      }
+    }
+  } catch (err) {
+    console.error("[WS] Error processing queued message:", err);
+  }
+}
+
+/**
  * Handle message.done from CLI:
  * Save the complete agent message to DB, notify the user,
  * and route back to sender agent's node for A2A conversations.
@@ -1516,6 +1614,15 @@ async function handleMessageDone(
       conversation.agent.slug,
       payload.conversationId,
       payload.content,
+    );
+  }
+
+  // Process queued messages: dequeue next and send automatically
+  if (!payload.error) {
+    void processNextQueuedMessage(
+      payload.conversationId,
+      conversation.userId,
+      conversation.agentId,
     );
   }
 

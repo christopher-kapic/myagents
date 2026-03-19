@@ -4,19 +4,32 @@ enum SenderType {
 }
 
 model Conversation {
-  id        String   @id @default(cuid(2))
-  title     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  agentId   String
-  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  messages  Message[]
+  id             String           @id @default(cuid(2))
+  title          String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @default(now()) @updatedAt
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentId        String
+  agent          Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  messages       Message[]
+  queuedMessages QueuedMessage[]
 
   @@index([userId])
   @@index([agentId])
   @@map("conversation")
+}
+
+model QueuedMessage {
+  id             String       @id @default(cuid(2))
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  content        String
+  position       Int
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+  @@map("queued_message")
 }
 
 model Message {

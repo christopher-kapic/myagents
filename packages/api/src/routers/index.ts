@@ -4,7 +4,7 @@ import { env } from "@myagents/env/server";
 import { protectedProcedure, publicProcedure } from "../index";
 import { agentsRouter } from "./agents";
 import { apiKeysRouter } from "./apiKeys";
-import { conversationsRouter, messagesRouter } from "./conversations";
+import { conversationsRouter, messagesRouter, queuedMessagesRouter } from "./conversations";
 import { healthRouter } from "./health";
 import { permissionsRouter } from "./permissions";
 import { pushRouter } from "./push";
@@ -33,6 +33,7 @@ export const appRouter = {
   agents: agentsRouter,
   conversations: conversationsRouter,
   messages: messagesRouter,
+  queuedMessages: queuedMessagesRouter,
   permissions: permissionsRouter,
   health: healthRouter,
 };
