@@ -337,6 +337,32 @@ function ConversationPage() {
         }
       }
 
+      // Handle message.cancel — another device cancelled, or server confirmed
+      if (frame.method === "message.cancel") {
+        const payload = frame.payload as { conversationId?: string };
+        if (payload?.conversationId === id) {
+          // Finalize any pending streaming message as cancelled
+          setLocalMessages((prev) => {
+            const lastIdx = prev.length - 1;
+            const last = prev[lastIdx];
+            if (last && last.senderType === "agent" && last.pending) {
+              return [
+                ...prev.slice(0, lastIdx),
+                { ...last, pending: false },
+              ];
+            }
+            return prev;
+          });
+          setSending(false);
+          // Refresh queue since queued messages are cleared on cancel
+          queryClient.invalidateQueries({
+            queryKey: orpc.queuedMessages.list.queryOptions({
+              input: { conversationId: id },
+            }).queryKey,
+          });
+        }
+      }
+
       // Handle queue.dequeued — server processed a queued message
       if (frame.method === "queue.dequeued") {
         const payload = frame.payload as {
@@ -397,6 +423,24 @@ function ConversationPage() {
     },
     [id, slug, sendFrame],
   );
+
+  // Cancel the current agent response
+  const handleCancel = useCallback(() => {
+    sendFrame("message.cancel", { conversationId: id });
+    // Optimistically finalize any pending streaming message
+    setLocalMessages((prev) => {
+      const lastIdx = prev.length - 1;
+      const last = prev[lastIdx];
+      if (last && last.senderType === "agent" && last.pending) {
+        return [
+          ...prev.slice(0, lastIdx),
+          { ...last, pending: false },
+        ];
+      }
+      return prev;
+    });
+    setSending(false);
+  }, [id, sendFrame]);
 
   // Send message or queue it if already sending
   const handleSend = useCallback(() => {
@@ -846,14 +890,26 @@ function ConversationPage() {
               )}
             </Button>
           )}
-          <Button
-            size="sm"
-            onClick={handleSend}
-            disabled={!inputValue.trim()}
-            className="h-10 w-10 p-0 shrink-0"
-          >
-            <Send className="h-4 w-4" />
-          </Button>
+          {sending ? (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={handleCancel}
+              className="h-10 w-10 p-0 shrink-0"
+              title="Cancel response"
+            >
+              <Square className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={handleSend}
+              disabled={!inputValue.trim()}
+              className="h-10 w-10 p-0 shrink-0"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
     </div>

@@ -12,6 +12,7 @@ export const FrameMethod = z.enum([
   "message.response",
   "message.chunk",
   "message.done",
+  "message.cancel",
   "agent.register",
   "agent.heartbeat",
   "agent.status",
@@ -78,6 +79,11 @@ export const MessageDonePayload = z.object({
   content: z.string(),
 });
 export type MessageDonePayload = z.infer<typeof MessageDonePayload>;
+
+export const MessageCancelPayload = z.object({
+  conversationId: z.string(),
+});
+export type MessageCancelPayload = z.infer<typeof MessageCancelPayload>;
 
 export const AgentRegisterPayload = z.object({
   slug: z.string(),

@@ -277,6 +277,10 @@ async function handleFrame(
       return handleMessageDone(frame, connection);
     }
 
+    case "message.cancel": {
+      return handleMessageCancel(frame, connection);
+    }
+
     case "agent.register": {
       return handleAgentRegister(frame, connection);
     }
@@ -1522,6 +1526,89 @@ async function processNextQueuedMessage(
   } catch (err) {
     console.error("[WS] Error processing queued message:", err);
   }
+}
+
+/**
+ * Handle message.cancel from a client:
+ * Forward the cancel request to the agent's CLI node so it can abort processing.
+ * Also broadcasts the cancel to all client connections to clear the sending state.
+ */
+async function handleMessageCancel(
+  frame: Frame,
+  connection: Connection,
+): Promise<Frame | null> {
+  if (connection.type !== "client") {
+    return createResponseFrame(
+      "message.cancel",
+      undefined,
+      frame.id,
+      "Only client connections can cancel messages",
+    );
+  }
+
+  const payload = frame.payload as { conversationId?: string };
+  if (!payload?.conversationId) {
+    return createResponseFrame(
+      "message.cancel",
+      undefined,
+      frame.id,
+      "Missing conversationId",
+    );
+  }
+
+  // Look up conversation to find the agent and verify ownership
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: payload.conversationId },
+    select: {
+      userId: true,
+      agentId: true,
+      agent: { select: { nodeId: true, slug: true } },
+    },
+  });
+
+  if (!conversation || conversation.userId !== connection.userId) {
+    return createResponseFrame(
+      "message.cancel",
+      undefined,
+      frame.id,
+      "Conversation not found",
+    );
+  }
+
+  // Forward cancel to the agent's CLI node
+  const nodeConn = connectionRegistry.getNodeConnection(conversation.agent.nodeId);
+  if (nodeConn && nodeConn.ws.readyState === 1) {
+    const cancelFrame = createRequestFrame("message.cancel", {
+      conversationId: payload.conversationId,
+      agentSlug: conversation.agent.slug,
+    });
+    nodeConn.ws.send(serializeFrame(cancelFrame));
+  }
+
+  // Broadcast message.cancel to all client connections so all devices clear sending state
+  const clientConns = connectionRegistry.getClientConnections(connection.userId);
+  const cancelEvent = createEventFrame("message.cancel", {
+    conversationId: payload.conversationId,
+  });
+  const serialized = serializeFrame(cancelEvent);
+  for (const client of clientConns) {
+    if (client.ws !== connection.ws && client.ws.readyState === 1) {
+      client.ws.send(serialized);
+    }
+  }
+
+  // Delete any queued messages for this conversation since the user is cancelling
+  await prisma.queuedMessage.deleteMany({
+    where: { conversationId: payload.conversationId },
+  });
+
+  console.log(`[WS] message cancelled for conversation ${payload.conversationId} by user ${connection.userId}`);
+
+  return createResponseFrame(
+    "message.cancel",
+    { success: true, conversationId: payload.conversationId },
+    frame.id,
+  );
 }
 
 /**
