@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import type { AgentAdapter, AgentStatus, HermesAdapterConfig } from "./types.js";
+import type { AgentAdapter, AgentStatus, HermesAdapterConfig, MessageContext } from "./types.js";
 
 const DEFAULT_TIMEOUT = 120_000; // 2 minutes
 
@@ -31,10 +31,31 @@ function cleanTerminalOutput(raw: string): string {
     .join("\n");
 }
 
+/**
+ * Parse the hermes session_id from stdout output.
+ * Hermes outputs `session_id: <id>` as the last line in quiet mode.
+ */
+function parseSessionId(output: string): { response: string; sessionId: string | null } {
+  const match = output.match(/\nsession_id:\s*(\S+)\s*$/);
+  if (match) {
+    return {
+      response: output.slice(0, match.index).trimEnd(),
+      sessionId: match[1],
+    };
+  }
+  return { response: output, sessionId: null };
+}
+
 export class HermesAdapter implements AgentAdapter {
   private config: HermesAdapterConfig;
   private binaryPath: string;
   private agentSlug: string;
+
+  /**
+   * Maps conversationId → hermes session_id so we can resume
+   * conversations across multiple messages using --resume.
+   */
+  private sessionMap = new Map<string, string>();
 
   constructor(config: HermesAdapterConfig = {}, agentSlug: string) {
     this.config = config;
@@ -44,41 +65,34 @@ export class HermesAdapter implements AgentAdapter {
 
   async *sendMessage(
     message: string,
-    history: Array<{ role: "user" | "agent"; content: string }>,
+    _history: Array<{ role: "user" | "agent"; content: string }>,
+    context?: MessageContext,
   ): AsyncGenerator<string> {
-    // Build the full message with conversation history so hermes has context
-    const fullMessage = this.buildMessageWithHistory(message, history);
-    const args = ["chat", "-q", fullMessage, "--quiet"];
+    const args = ["chat", "-q", message, "--quiet"];
+
+    // Resume existing hermes session if we have one for this conversation
+    const conversationId = context?.conversationId;
+    if (conversationId) {
+      const existingSessionId = this.sessionMap.get(conversationId);
+      if (existingSessionId) {
+        args.push("--resume", existingSessionId);
+      }
+    }
 
     // Support --toolsets passthrough from adapter config
     if (this.config.toolsets && this.config.toolsets.length > 0) {
       args.push("--toolsets", this.config.toolsets.join(","));
     }
 
-    const output = await this.runProcess(args);
-    yield output;
-  }
+    const rawOutput = await this.runProcess(args);
 
-  /**
-   * Prepend conversation history to the message so hermes has context
-   * of the ongoing conversation. Without this, each hermes invocation
-   * is completely stateless.
-   */
-  private buildMessageWithHistory(
-    message: string,
-    history: Array<{ role: "user" | "agent"; content: string }>,
-  ): string {
-    if (history.length === 0) return message;
-
-    const lines: string[] = [
-      "<conversation_history>",
-    ];
-    for (const entry of history) {
-      const role = entry.role === "user" ? "User" : "Assistant";
-      lines.push(`${role}: ${entry.content}`);
+    // Parse and store the session_id for future messages in this conversation
+    const { response, sessionId } = parseSessionId(rawOutput);
+    if (sessionId && conversationId) {
+      this.sessionMap.set(conversationId, sessionId);
     }
-    lines.push("</conversation_history>", "", message);
-    return lines.join("\n");
+
+    yield response;
   }
 
   async getStatus(): Promise<AgentStatus> {

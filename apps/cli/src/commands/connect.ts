@@ -177,7 +177,7 @@ async function processMessage(
   try {
     let fullContent = "";
 
-    for await (const chunk of adapter.sendMessage(message, history)) {
+    for await (const chunk of adapter.sendMessage(message, history, { conversationId })) {
       fullContent += chunk;
 
       // Send chunk for streaming display

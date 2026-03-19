@@ -10,16 +10,23 @@ export interface AgentStatus {
  * Interface that all agent adapters must implement.
  * Adapters bridge the CLI to specific agent runtimes (Hermes, OpenClaw, custom).
  */
+export interface MessageContext {
+  /** The conversation ID from the server, used for session tracking */
+  conversationId?: string;
+}
+
 export interface AgentAdapter {
   /**
    * Send a message to the agent and receive a streaming response.
    * @param message - The user's message text
    * @param history - Previous messages in the conversation for context
+   * @param context - Additional context (conversation ID, etc.)
    * @returns An async generator yielding response text chunks
    */
   sendMessage(
     message: string,
     history: Array<{ role: "user" | "agent"; content: string }>,
+    context?: MessageContext,
   ): AsyncGenerator<string>;
 
   /**
