@@ -44,21 +44,11 @@ export const permissionsRouter = {
         });
       }
 
-      // Cross-user permission: target agent must have an active share for this user (admin can override)
+      // Only the owner of the target agent can grant permissions to it (admin can override)
       if (!admin && targetAgent.userId !== userId) {
-        const hasShare = await prisma.agentShare.findFirst({
-          where: {
-            agentId: input.targetAgentId,
-            userId,
-            active: true,
-          },
+        throw new ORPCError("FORBIDDEN", {
+          message: "Only the agent owner can grant permissions to it",
         });
-
-        if (!hasShare) {
-          throw new ORPCError("FORBIDDEN", {
-            message: "Target agent is not shared with you",
-          });
-        }
       }
 
       // Prevent self-permission
