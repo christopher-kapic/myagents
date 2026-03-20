@@ -257,10 +257,12 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
           return;
         }
 
-        setMode("processing");
         whisperStartTimeRef.current = Date.now();
         try {
           await whisper.transcribeBlob(blob);
+          // Set mode AFTER transcribeBlob so that whisper.output is reset to null
+          // and isBusy is true — prevents the effect from firing with stale output.
+          setMode("processing");
         } catch (err) {
           setError(err instanceof Error ? err.message : "Transcription failed");
           setMode("idle");

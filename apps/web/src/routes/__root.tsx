@@ -69,7 +69,7 @@ function RootComponent() {
           }}
         >
           {!mobileKeyboardOpen && <Header />}
-          <main style={{ viewTransitionName: "page" }} className="min-h-0 overflow-y-auto">
+          <main style={{ viewTransitionName: "page", scrollbarGutter: "stable" }} className="min-h-0 overflow-y-auto">
             <Outlet />
           </main>
           <BottomNav hidden={mobileKeyboardOpen} />
