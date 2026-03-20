@@ -27,11 +27,12 @@ function cleanTerminalOutput(raw: string): string {
       const parts = line.split("\r");
       // The last non-empty segment is what the terminal would display
       for (let i = parts.length - 1; i >= 0; i--) {
-        if (parts[i].trim()) return parts[i];
+        const part = parts[i];
+        if (part && part.trim()) return part;
       }
       return "";
     })
-    .filter((line) => line.trim())
+    .filter((line: string) => line.trim())
     .join("\n");
 }
 
@@ -44,7 +45,7 @@ function parseSessionId(output: string): { response: string; sessionId: string |
   if (match) {
     return {
       response: output.slice(0, match.index).trimEnd(),
-      sessionId: match[1],
+      sessionId: match[1] ?? null,
     };
   }
   return { response: output, sessionId: null };

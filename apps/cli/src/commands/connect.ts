@@ -226,7 +226,7 @@ async function processMessage(
   message: string,
   conversationId: string,
   agentSlug: string,
-  frameId: string,
+  _frameId: string,
   client: WsClient,
   history: Array<{ role: "user" | "agent"; content: string }> = [],
 ): Promise<void> {

@@ -163,7 +163,14 @@
   @keyframes slide-to-left {
     to { transform: translateX(-20px); }
   }
+  @keyframes slide-from-left {
+    from { transform: translateX(-20px); }
+  }
+  @keyframes slide-to-right {
+    to { transform: translateX(20px); }
+  }
 
+  /* Forward navigation (default): slide from right */
   ::view-transition-old(page) {
     animation: 150ms cubic-bezier(0.4, 0, 1, 1) both fade-out,
                200ms cubic-bezier(0.4, 0, 0.2, 1) both slide-to-left;
@@ -171,6 +178,16 @@
   ::view-transition-new(page) {
     animation: 210ms cubic-bezier(0, 0, 0.2, 1) 90ms both fade-in,
                200ms cubic-bezier(0.4, 0, 0.2, 1) both slide-from-right;
+  }
+
+  /* Back navigation: slide from left */
+  html[data-nav-direction="back"]::view-transition-old(page) {
+    animation: 150ms cubic-bezier(0.4, 0, 1, 1) both fade-out,
+               200ms cubic-bezier(0.4, 0, 0.2, 1) both slide-to-right;
+  }
+  html[data-nav-direction="back"]::view-transition-new(page) {
+    animation: 210ms cubic-bezier(0, 0, 0.2, 1) 90ms both fade-in,
+               200ms cubic-bezier(0.4, 0, 0.2, 1) both slide-from-left;
   }
 
   /* Hide scrollbar for horizontal scroll containers */

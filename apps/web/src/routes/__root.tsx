@@ -13,6 +13,7 @@ import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useAppUpdate } from "@/hooks/use-app-update";
 import { useMobileKeyboard } from "@/hooks/use-mobile-keyboard";
+import { useNavDirection } from "@/hooks/use-nav-direction";
 import { link, orpc } from "@/utils/orpc";
 
 import "../index.css";
@@ -45,6 +46,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
 
 function RootComponent() {
   useAppUpdate();
+  useNavDirection();
   const [client] = useState<AppRouterClient>(() => createORPCClient(link));
   const [orpcUtils] = useState(() => createTanstackQueryUtils(client));
   const mobileKeyboardOpen = useMobileKeyboard();

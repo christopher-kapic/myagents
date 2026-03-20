@@ -30,13 +30,17 @@ export class ApiClient {
     const urlPath = path.replace(/\./g, "/");
     const url = `${this.serverUrl}/rpc/${urlPath}`;
 
+    // oRPC's RPC protocol expects the body wrapped as { json: <input> }
+    const body =
+      input !== undefined ? JSON.stringify({ json: input }) : undefined;
+
     const res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.apiKey}`,
       },
-      body: input !== undefined ? JSON.stringify(input) : JSON.stringify(undefined),
+      body,
     });
 
     if (!res.ok) {
@@ -44,7 +48,8 @@ export class ApiClient {
       throw new Error(`API error (${res.status}): ${text || res.statusText}`);
     }
 
+    // oRPC wraps responses as { json: <output>, meta?: [...] }
     const data = await res.json();
-    return data as T;
+    return (data as { json: T }).json;
   }
 }
