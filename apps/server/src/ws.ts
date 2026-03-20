@@ -932,7 +932,7 @@ async function handleMessageSend(
     );
   }
 
-  const { agentSlug, content } = payload;
+  const { agentSlug, content, openclawAgentId } = payload;
   const userId = connection.userId;
 
   // Look up the target agent
@@ -1034,6 +1034,7 @@ async function handleMessageSend(
     content,
     messageId: message.id,
     history,
+    ...(openclawAgentId ? { openclawAgentId } : {}),
   });
   nodeConn.ws.send(serializeFrame(forwardFrame));
 
@@ -2013,6 +2014,7 @@ apiEvents.onAgentConfigUpdate((event) => {
     timeout: event.timeout,
     name: event.name,
     description: event.description,
+    openclawAgentId: event.openclawAgentId,
   });
 
   try {

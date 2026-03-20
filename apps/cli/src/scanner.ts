@@ -79,14 +79,38 @@ function detectOpenClaw(): DetectedAgent | null {
     return null;
   }
 
+  const binaryPath = binaryExists ? findBinaryPath("openclaw") : undefined;
+
+  // Discover available openclaw agents
+  let availableAgents: Array<{ id: string; name?: string; isDefault: boolean }> = [];
+  let defaultAgentId: string | undefined;
+  if (binaryPath) {
+    try {
+      const output = execSync(`${binaryPath} agents list --json`, {
+        encoding: "utf-8",
+        timeout: 10_000,
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      availableAgents = JSON.parse(output);
+      const defaultAgent = availableAgents.find((a) => a.isDefault);
+      if (defaultAgent) {
+        defaultAgentId = defaultAgent.id;
+      }
+    } catch {
+      // Ignore — agents list is optional
+    }
+  }
+
   return {
     slug: "openclaw",
     name: "OpenClaw",
     description: "OpenClaw AI agent",
     type: "openclaw",
     adapterConfig: {
-      binaryPath: binaryExists ? findBinaryPath("openclaw") : undefined,
+      binaryPath,
       configPath: configExists ? configPath : undefined,
+      ...(availableAgents.length > 0 ? { availableAgents } : {}),
+      ...(defaultAgentId ? { agentId: defaultAgentId } : {}),
     },
   };
 }

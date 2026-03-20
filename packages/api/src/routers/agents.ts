@@ -532,6 +532,56 @@ export const agentsRouter = {
       return serializeAgent(updated);
     }),
 
+  setOpenClawAgent: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        openclawAgentId: z.string().min(1).max(255),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+      const admin = isAdmin(context);
+
+      const agent = await prisma.agent.findUnique({
+        where: { id: input.id },
+        select: { userId: true, slug: true, nodeId: true, type: true, adapterConfig: true },
+      });
+
+      if (!agent || (!admin && agent.userId !== userId)) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Agent not found",
+        });
+      }
+
+      if (agent.type !== "openclaw") {
+        throw new ORPCError("BAD_REQUEST", {
+          message: "This setting is only available for OpenClaw agents",
+        });
+      }
+
+      const currentConfig = (agent.adapterConfig as Record<string, unknown>) ?? {};
+      const updated = await prisma.agent.update({
+        where: { id: input.id },
+        data: {
+          adapterConfig: { ...currentConfig, agentId: input.openclawAgentId },
+        },
+        select: agentSelect,
+      });
+
+      // Notify connected CLI node so it updates its adapter
+      if (agent.nodeId) {
+        apiEvents.emitAgentConfigUpdate({
+          agentId: input.id,
+          nodeId: agent.nodeId,
+          oldSlug: agent.slug,
+          openclawAgentId: input.openclawAgentId,
+        });
+      }
+
+      return serializeAgent(updated);
+    }),
+
   getRateLimit: protectedProcedure
     .input(
       z.object({

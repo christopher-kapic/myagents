@@ -49,6 +49,7 @@ export const MessageSendPayload = z.object({
   content: z.string(),
   senderAgent: z.string().optional(),
   targetAgent: z.string().optional(),
+  openclawAgentId: z.string().optional(),
 });
 export type MessageSendPayload = z.infer<typeof MessageSendPayload>;
 

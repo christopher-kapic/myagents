@@ -809,6 +809,11 @@ function SettingsTab({
   const currentTimeoutMin = currentTimeoutMs / 60000;
   const [timeoutMin, setTimeoutMin] = useState(currentTimeoutMin);
   const isBuiltInType = agent.type === "hermes" || agent.type === "openclaw";
+  const isOpenClaw = agent.type === "openclaw";
+  const adapterConfig = agent.adapterConfig as Record<string, unknown> | null;
+  const availableOpenClawAgents = (adapterConfig?.availableAgents as Array<{ id: string; name?: string; isDefault: boolean }>) ?? [];
+  const currentOpenClawAgentId = (adapterConfig?.agentId as string) ?? "";
+  const [openclawAgentId, setOpenclawAgentId] = useState(currentOpenClawAgentId);
 
   const updateMutation = useMutation({
     mutationFn: (data: { slug?: string; name?: string; description?: string | null }) =>
@@ -843,6 +848,16 @@ function SettingsTab({
   const timeoutMutation = useMutation({
     mutationFn: (data: { timeout: number }) =>
       orpc.agents.setTimeout.call({ id: String(agent.id), ...data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
+      });
+    },
+  });
+
+  const openclawAgentMutation = useMutation({
+    mutationFn: (data: { openclawAgentId: string }) =>
+      orpc.agents.setOpenClawAgent.call({ id: String(agent.id), ...data }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
@@ -1020,6 +1035,73 @@ function SettingsTab({
           </CardContent>
         </Card>
       ) : null}
+
+      {/* OpenClaw Agent Selection */}
+      {isOpenClaw && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bot className="h-4 w-4" />
+              OpenClaw Agent
+            </CardTitle>
+            <CardDescription>
+              Select which OpenClaw agent handles messages sent to this connector.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="openclaw-agent" className="text-sm font-medium">
+                Default Agent
+              </label>
+              {availableOpenClawAgents.length > 0 ? (
+                <select
+                  id="openclaw-agent"
+                  value={openclawAgentId}
+                  onChange={(e) => setOpenclawAgentId(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">Select an agent...</option>
+                  {availableOpenClawAgents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name ? `${a.name} (${a.id})` : a.id}
+                      {a.isDefault ? " - default" : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <Input
+                  id="openclaw-agent"
+                  value={openclawAgentId}
+                  onChange={(e) => setOpenclawAgentId(e.target.value)}
+                  placeholder="e.g. ops, assistant"
+                />
+              )}
+              <p className="text-xs text-muted-foreground">
+                The agent ID configured in your OpenClaw installation. Run{" "}
+                <code className="text-xs">openclaw agents list</code> to see available agents.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => openclawAgentMutation.mutate({ openclawAgentId })}
+                disabled={openclawAgentId === currentOpenClawAgentId || !openclawAgentId || openclawAgentMutation.isPending}
+              >
+                {openclawAgentMutation.isPending ? "Saving..." : "Save Agent"}
+              </Button>
+              {openclawAgentMutation.isSuccess && (
+                <span className="text-sm text-green-600 dark:text-green-400">
+                  Saved
+                </span>
+              )}
+              {openclawAgentMutation.isError && (
+                <span className="text-sm text-red-600 dark:text-red-400">
+                  Failed to save
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Rate Limiting */}
       <Card>

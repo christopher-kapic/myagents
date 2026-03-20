@@ -23,6 +23,7 @@ export function createAdapter(agent: DetectedAgent): AgentAdapter | null {
         binaryPath: config.binaryPath as string | undefined,
         configPath: config.configPath as string | undefined,
         gatewayUrl: config.gatewayUrl as string | undefined,
+        agentId: config.agentId as string | undefined,
       }, agent.slug);
     case "custom": {
       const command = config.command as string | undefined;

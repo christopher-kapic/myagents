@@ -73,6 +73,15 @@ function ConversationPage() {
   const [olderMessages, setOlderMessages] = useState<ChatMessage[]>([]);
   const voice = useVoiceRecording();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [selectedOpenClawAgent, setSelectedOpenClawAgent] = useState<string>("");
+
+  // Fetch agent data to check for openclaw type and available agents
+  const agentQuery = useQuery(orpc.agents.get.queryOptions({ input: { slug } }));
+  const agentData = agentQuery.data as Record<string, unknown> | undefined;
+  const isOpenClaw = agentData?.type === "openclaw";
+  const openclawAdapterConfig = agentData?.adapterConfig as Record<string, unknown> | null;
+  const availableOpenClawAgents = (openclawAdapterConfig?.availableAgents as Array<{ id: string; name?: string; isDefault: boolean }>) ?? [];
+  const defaultOpenClawAgent = (openclawAdapterConfig?.agentId as string) ?? "";
 
   // Scroll only the messages container to the bottom (avoids scrolling <main> or the whole page)
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
@@ -424,13 +433,15 @@ function ConversationPage() {
       };
       setLocalMessages((prev) => [...prev, userMsg]);
       setSending(true);
+      const openclawAgentId = selectedOpenClawAgent || defaultOpenClawAgent;
       sendFrame("message.send", {
         conversationId: id,
         agentSlug: slug,
         content,
+        ...(isOpenClaw && openclawAgentId ? { openclawAgentId } : {}),
       });
     },
-    [id, slug, sendFrame],
+    [id, slug, sendFrame, isOpenClaw, selectedOpenClawAgent, defaultOpenClawAgent],
   );
 
   // Cancel the current agent response
@@ -815,6 +826,22 @@ function ConversationPage() {
             >
               Dismiss
             </button>
+          </div>
+        )}
+        {isOpenClaw && availableOpenClawAgents.length > 1 && (
+          <div className="flex items-center gap-2 max-w-4xl mx-auto mb-2">
+            <label className="text-xs text-muted-foreground shrink-0">Agent:</label>
+            <select
+              value={selectedOpenClawAgent || defaultOpenClawAgent}
+              onChange={(e) => setSelectedOpenClawAgent(e.target.value)}
+              className="text-xs rounded-md border border-input bg-transparent px-2 py-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {availableOpenClawAgents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name ? `${a.name} (${a.id})` : a.id}
+                </option>
+              ))}
+            </select>
           </div>
         )}
         <div className="flex items-end gap-2 max-w-4xl mx-auto">

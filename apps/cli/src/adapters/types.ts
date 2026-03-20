@@ -53,6 +53,7 @@ export interface OpenClawAdapterConfig {
   binaryPath?: string;
   configPath?: string;
   gatewayUrl?: string;
+  agentId?: string;
 }
 
 export interface CustomAdapterConfig {

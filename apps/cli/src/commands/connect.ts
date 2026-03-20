@@ -125,6 +125,7 @@ function handleFrame(frame: Frame, client: WsClient): void {
       const message = payload?.["content"] as string | undefined;
       const conversationId = payload?.["conversationId"] as string | undefined;
       const history = (payload?.["history"] as Array<{ role: "user" | "agent"; content: string }>) ?? [];
+      const openclawAgentId = payload?.["openclawAgentId"] as string | undefined;
 
       console.log(`Received message for agent "${agentSlug}": ${message?.slice(0, 80)}`);
       log("info", `Message received for agent "${agentSlug}": ${message?.slice(0, 120)}`);
@@ -146,6 +147,11 @@ function handleFrame(frame: Frame, client: WsClient): void {
         break;
       }
 
+      // Apply per-message OpenClaw agent override if specified
+      if (openclawAgentId && "setAgentId" in adapter && typeof adapter.setAgentId === "function") {
+        adapter.setAgentId(openclawAgentId);
+      }
+
       // Process message asynchronously through the adapter
       void processMessage(adapter, message, conversationId ?? "", agentSlug, frame.id, client, history);
       break;
@@ -157,6 +163,7 @@ function handleFrame(frame: Frame, client: WsClient): void {
       const timeout = payload?.["timeout"] as number | undefined;
       const name = payload?.["name"] as string | undefined;
       const description = payload?.["description"] as string | undefined;
+      const openclawAgentId = payload?.["openclawAgentId"] as string | undefined;
 
       if (oldSlug) {
         const changes = updateAgentConfig(oldSlug, { newSlug, timeout, name, description });
@@ -180,6 +187,17 @@ function handleFrame(frame: Frame, client: WsClient): void {
             if (adapter?.setTimeout) {
               adapter.setTimeout(timeout);
             }
+          }
+        }
+
+        // Update OpenClaw agent ID at runtime
+        if (openclawAgentId !== undefined) {
+          const adapterSlug = newSlug ?? oldSlug;
+          const adapter = agentAdapters.get(adapterSlug);
+          if (adapter && "setAgentId" in adapter && typeof adapter.setAgentId === "function") {
+            adapter.setAgentId(openclawAgentId);
+            console.log(`OpenClaw agent ID updated for "${adapterSlug}": ${openclawAgentId}`);
+            log("info", `OpenClaw agent ID updated for "${adapterSlug}": ${openclawAgentId}`);
           }
         }
       }

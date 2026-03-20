@@ -10,12 +10,32 @@ export class OpenClawAdapter implements AgentAdapter {
   private binaryPath: string;
   private gatewayUrl: string;
   private agentSlug: string;
+  private agentId: string | undefined;
 
   constructor(config: OpenClawAdapterConfig = {}, agentSlug: string) {
     this.config = config;
     this.binaryPath = config.binaryPath ?? "openclaw";
     this.gatewayUrl = config.gatewayUrl ?? DEFAULT_GATEWAY_URL;
     this.agentSlug = agentSlug;
+    this.agentId = config.agentId;
+  }
+
+  setAgentId(agentId: string): void {
+    this.agentId = agentId;
+  }
+
+  /**
+   * List available agents configured in the openclaw system.
+   * Returns parsed JSON from `openclaw agents list --json`.
+   */
+  async listOpenClawAgents(): Promise<Array<{ id: string; name?: string; isDefault: boolean }>> {
+    try {
+      const output = await this.runProcess(["agents", "list", "--json"]);
+      const agents = JSON.parse(output) as Array<{ id: string; name?: string; isDefault: boolean }>;
+      return agents;
+    } catch {
+      return [];
+    }
   }
 
   async *sendMessage(
@@ -155,7 +175,8 @@ export class OpenClawAdapter implements AgentAdapter {
   }
 
   private async *sendViaSubprocess(message: string): AsyncGenerator<string> {
-    const output = await this.runProcess(["agent", "--message", message, "--json"]);
+    const openclawAgentId = this.agentId ?? this.agentSlug;
+    const output = await this.runProcess(["agent", "--agent", openclawAgentId, "--message", message, "--json"]);
 
     // Parse JSON output to extract the response text
     try {

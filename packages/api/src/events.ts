@@ -8,6 +8,7 @@ export interface AgentConfigUpdateEvent {
   timeout?: number;
   name?: string;
   description?: string;
+  openclawAgentId?: string;
 }
 
 class ApiEvents extends EventEmitter {
