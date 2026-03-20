@@ -19,6 +19,7 @@ export class OpenClawAdapter implements AgentAdapter {
   private gatewayUrl: string;
   private agentSlug: string;
   private agentId: string | undefined;
+  private timeout: number;
   private lastResponseMeta: OpenClawResponseMeta | null = null;
 
   constructor(config: OpenClawAdapterConfig = {}, agentSlug: string) {
@@ -27,6 +28,11 @@ export class OpenClawAdapter implements AgentAdapter {
     this.gatewayUrl = config.gatewayUrl ?? DEFAULT_GATEWAY_URL;
     this.agentSlug = agentSlug;
     this.agentId = config.agentId;
+    this.timeout = config.timeout ?? DEFAULT_TIMEOUT;
+  }
+
+  setTimeout(timeout: number): void {
+    this.timeout = timeout;
   }
 
   setAgentId(agentId: string): void {
@@ -115,7 +121,7 @@ export class OpenClawAdapter implements AgentAdapter {
     ];
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT);
+    const timeout = setTimeout(() => controller.abort(), this.timeout);
 
     let response: Response;
     try {
@@ -131,7 +137,7 @@ export class OpenClawAdapter implements AgentAdapter {
     } catch (err) {
       clearTimeout(timeout);
       if (err instanceof Error && err.name === "AbortError") {
-        throw new Error(`OpenClaw gateway request timed out after ${DEFAULT_TIMEOUT / 1000}s`);
+        throw new Error(`OpenClaw gateway request timed out after ${this.timeout / 1000}s`);
       }
       throw new Error(`OpenClaw gateway connection failed: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -252,7 +258,7 @@ export class OpenClawAdapter implements AgentAdapter {
     return new Promise((resolve, reject) => {
       const proc = spawn(this.binaryPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
-        timeout: DEFAULT_TIMEOUT,
+        timeout: this.timeout,
         env: {
           ...process.env,
           MYAGENTS_AGENT_SLUG: this.agentSlug,

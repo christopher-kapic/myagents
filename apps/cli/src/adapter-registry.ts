@@ -17,6 +17,7 @@ export function createAdapter(agent: DetectedAgent): AgentAdapter | null {
         binaryPath: config.binaryPath as string | undefined,
         configPath: config.configPath as string | undefined,
         toolsets: config.toolsets as string[] | undefined,
+        timeout: config.timeout as number | undefined,
       }, agent.slug);
     case "openclaw":
       return new OpenClawAdapter({
@@ -24,6 +25,7 @@ export function createAdapter(agent: DetectedAgent): AgentAdapter | null {
         configPath: config.configPath as string | undefined,
         gatewayUrl: config.gatewayUrl as string | undefined,
         agentId: config.agentId as string | undefined,
+        timeout: config.timeout as number | undefined,
       }, agent.slug);
     case "custom": {
       const command = config.command as string | undefined;

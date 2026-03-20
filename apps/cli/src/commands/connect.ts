@@ -7,7 +7,7 @@ import type { AgentAdapter } from "../adapters/types.js";
 import { OpenClawAdapter } from "../adapters/openclaw.js";
 import type { Frame } from "@myagents/shared";
 import { log, ensureLogsDir } from "../logger.js";
-import { updateAgentConfig, ensureAgentsInYaml } from "../agent-config.js";
+import { updateAgentConfig, ensureAgentsInYaml, mergeYamlOverrides } from "../agent-config.js";
 
 /** Map of agent slug → adapter instance, populated after agent detection */
 const agentAdapters = new Map<string, AgentAdapter>();
@@ -43,6 +43,8 @@ export const connectCommand = new Command("connect")
     } else {
       console.log(`Found ${detectedAgents.length} agent(s).`);
       ensureAgentsInYaml(detectedAgents);
+      // Merge back any persisted overrides (display name, timeout) from YAML
+      mergeYamlOverrides(detectedAgents);
     }
 
     // Create adapters for detected agents

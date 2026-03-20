@@ -55,11 +55,17 @@ export class HermesAdapter implements AgentAdapter {
   private config: HermesAdapterConfig;
   private binaryPath: string;
   private agentSlug: string;
+  private timeout: number;
 
   constructor(config: HermesAdapterConfig = {}, agentSlug: string) {
     this.config = config;
     this.binaryPath = config.binaryPath ?? "hermes";
     this.agentSlug = agentSlug;
+    this.timeout = config.timeout ?? DEFAULT_TIMEOUT;
+  }
+
+  setTimeout(timeout: number): void {
+    this.timeout = timeout;
   }
 
   async *sendMessage(
@@ -132,7 +138,7 @@ export class HermesAdapter implements AgentAdapter {
     return new Promise((resolve, reject) => {
       const proc = spawn(this.binaryPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
-        timeout: DEFAULT_TIMEOUT,
+        timeout: this.timeout,
         env: {
           ...process.env,
           MYAGENTS_AGENT_SLUG: this.agentSlug,

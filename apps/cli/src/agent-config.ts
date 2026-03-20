@@ -5,6 +5,91 @@ import { homedir } from "node:os";
 const AGENTS_YAML_PATH = join(homedir(), ".myagents", "agents.yaml");
 
 /**
+ * Read persisted overrides (name, description, timeout) from agents.yaml
+ * and merge them back into the detected agents. This ensures that display
+ * names and timeout settings survive CLI restarts.
+ */
+export function mergeYamlOverrides(
+  agents: Array<{
+    slug: string;
+    name: string;
+    description?: string;
+    type: string;
+    adapterConfig?: Record<string, unknown>;
+  }>,
+): void {
+  if (!existsSync(AGENTS_YAML_PATH)) return;
+
+  const content = readFileSync(AGENTS_YAML_PATH, "utf-8");
+  const lines = content.split("\n");
+
+  // Parse YAML to extract stored values per slug
+  const stored = new Map<string, { name?: string; description?: string; timeout?: number }>();
+  let currentSlug: string | null = null;
+  let currentEntry: { name?: string; description?: string; timeout?: number } = {};
+  let inAdapter = false;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    if (!line.trim() || line.trim().startsWith("#")) continue;
+
+    // New agent entry
+    if (/^\s*-\s+slug:\s*/.test(line)) {
+      if (currentSlug) stored.set(currentSlug, currentEntry);
+      const match = line.match(/slug:\s*"?([^"\s]+)"?/);
+      currentSlug = match?.[1] ?? null;
+      currentEntry = {};
+      inAdapter = false;
+      continue;
+    }
+
+    if (!currentSlug) continue;
+
+    if (/^\s+adapter:\s*$/.test(line)) {
+      inAdapter = true;
+      continue;
+    }
+
+    if (inAdapter && /^\s{6,}timeout:\s*/.test(line)) {
+      const match = line.match(/timeout:\s*(\d+)/);
+      if (match?.[1]) currentEntry.timeout = parseInt(match[1], 10);
+      continue;
+    }
+
+    if (/^\s+name:\s*/.test(line) && !inAdapter) {
+      const match = line.match(/name:\s*(.*)/);
+      if (match?.[1]) currentEntry.name = match[1].trim().replace(/^["']|["']$/g, "");
+      continue;
+    }
+
+    if (/^\s+description:\s*/.test(line) && !inAdapter) {
+      const match = line.match(/description:\s*(.*)/);
+      if (match?.[1]) currentEntry.description = match[1].trim().replace(/^["']|["']$/g, "");
+      continue;
+    }
+
+    // Exit adapter section on non-deeply-indented line
+    if (inAdapter && /^\s{4}\w+:/.test(line)) {
+      inAdapter = false;
+    }
+  }
+  if (currentSlug) stored.set(currentSlug, currentEntry);
+
+  // Merge stored values into detected agents
+  for (const agent of agents) {
+    const override = stored.get(agent.slug);
+    if (!override) continue;
+
+    if (override.name) agent.name = override.name;
+    if (override.description) agent.description = override.description;
+    if (override.timeout !== undefined) {
+      agent.adapterConfig = agent.adapterConfig ?? {};
+      agent.adapterConfig.timeout = override.timeout;
+    }
+  }
+}
+
+/**
  * Ensure that scanner-detected agents are persisted to agents.yaml so that
  * subsequent config updates from the web UI can find and modify them.
  */

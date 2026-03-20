@@ -47,6 +47,7 @@ export interface HermesAdapterConfig {
   binaryPath?: string;
   configPath?: string;
   toolsets?: string[];
+  timeout?: number;
 }
 
 export interface OpenClawAdapterConfig {
@@ -54,6 +55,7 @@ export interface OpenClawAdapterConfig {
   configPath?: string;
   gatewayUrl?: string;
   agentId?: string;
+  timeout?: number;
 }
 
 export interface CustomAdapterConfig {
