@@ -40,7 +40,6 @@ model Agent {
   status        AgentStatus @default(offline)
   adapterConfig          Json?
   renderMarkdown         Boolean     @default(true)
-  shared                 Boolean     @default(false)
   rateLimitPerMin        Int         @default(60)
   circuitBreakerThreshold Int        @default(10)
   conversations        Conversation[]

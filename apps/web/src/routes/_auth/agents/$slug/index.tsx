@@ -407,7 +407,6 @@ function PermissionsTab({
 }) {
   const queryClient = useQueryClient();
   const agentId = String(agent.id);
-  const isShared = Boolean(agent.shared);
   const [searchQuery, setSearchQuery] = useState("");
 
   // Fetch current permissions
@@ -417,24 +416,6 @@ function PermissionsTab({
 
   // Fetch user's own agents to show as toggleable targets
   const agentsQuery = useQuery(orpc.agents.list.queryOptions());
-
-  const shareMutation = useMutation({
-    mutationFn: () => orpc.agents.share.call({ id: agentId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
-      });
-    },
-  });
-
-  const unshareMutation = useMutation({
-    mutationFn: () => orpc.agents.unshare.call({ id: agentId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: orpc.agents.get.queryOptions({ input: { slug } }).queryKey,
-      });
-    },
-  });
 
   const grantMutation = useMutation({
     mutationFn: (targetAgentId: string) =>
@@ -533,14 +514,6 @@ function PermissionsTab({
     }
   };
 
-  const handleShareToggle = () => {
-    if (isShared) {
-      unshareMutation.mutate();
-    } else {
-      shareMutation.mutate();
-    }
-  };
-
   const handleAllowAll = () => {
     const allTargets = [
       ...ownAgents.map((a) => String(a.id)),
@@ -560,29 +533,6 @@ function PermissionsTab({
 
   return (
     <div className="space-y-6">
-      {/* Share Toggle */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Share this agent</CardTitle>
-          <CardDescription>
-            When enabled, other users can discover this agent and grant their
-            agents permission to message it.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3">
-            <Switch
-              checked={isShared}
-              onCheckedChange={handleShareToggle}
-              disabled={shareMutation.isPending || unshareMutation.isPending}
-            />
-            <span className="text-sm font-medium">
-              {isShared ? "Shared" : "Not shared"}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Can Send To */}
       <Card>
         <CardHeader>

@@ -721,7 +721,6 @@ async function handleAgentList(
             description: true,
             type: true,
             status: true,
-            shared: true,
             userId: true,
             node: { select: { id: true, name: true, status: true } },
             user: { select: { username: true } },
@@ -740,7 +739,6 @@ async function handleAgentList(
         description: agent.description,
         type: String(agent.type),
         status: String(agent.status),
-        shared: agent.shared,
         node: agent.node
           ? {
               id: agent.node.id,
@@ -780,25 +778,22 @@ async function handleAgentList(
       description: true,
       type: true,
       status: true,
-      shared: true,
       node: { select: { id: true, name: true, status: true } },
     },
     orderBy: { name: "asc" },
   });
 
-  // Find shared agents from other users
-  const sharedPermissions = await prisma.agentPermission.findMany({
+  // Find agents shared with this user via AgentShare
+  const activeShares = await prisma.agentShare.findMany({
     where: {
-      createdBy: userId,
-      targetAgent: {
-        userId: { not: userId },
-        shared: true,
-      },
+      userId,
+      active: true,
+      agent: { userId: { not: userId } },
     },
-    select: { targetAgentId: true },
+    select: { agentId: true },
   });
 
-  const sharedAgentIds = sharedPermissions.map((p) => p.targetAgentId);
+  const sharedAgentIds = activeShares.map((s) => s.agentId);
   let sharedAgents: Array<Record<string, unknown>> = [];
 
   if (sharedAgentIds.length > 0) {
@@ -824,7 +819,6 @@ async function handleAgentList(
         description: true,
         type: true,
         status: true,
-        shared: true,
         userId: true,
         node: { select: { id: true, name: true, status: true } },
         user: { select: { username: true } },
@@ -839,7 +833,6 @@ async function handleAgentList(
       description: agent.description,
       type: String(agent.type),
       status: String(agent.status),
-      shared: agent.shared,
       node: agent.node
         ? {
             id: agent.node.id,
@@ -861,7 +854,6 @@ async function handleAgentList(
     description: agent.description,
     type: String(agent.type),
     status: String(agent.status),
-    shared: agent.shared,
     node: agent.node
       ? {
           id: agent.node.id,
@@ -1537,14 +1529,13 @@ async function handleAgentToAgentSend(
 }
 
 /**
- * Check if an agent has shared=true.
+ * Check if an agent has any active shares.
  */
 async function isAgentShared(agentId: string): Promise<boolean> {
-  const agent = await prisma.agent.findUnique({
-    where: { id: agentId },
-    select: { shared: true },
+  const shareCount = await prisma.agentShare.count({
+    where: { agentId, active: true },
   });
-  return agent?.shared === true;
+  return shareCount > 0;
 }
 
 /**
