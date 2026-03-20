@@ -30,8 +30,10 @@ export function scanForAgents(): DetectedAgent[] {
     console.log(`  Detected OpenClaw agent`);
   }
 
+  const knownSlugs = new Set(agents.map((a) => a.slug));
   const custom = detectCustomAgents();
   for (const agent of custom) {
+    if (knownSlugs.has(agent.slug)) continue;
     agents.push(agent);
     console.log(`  Detected custom agent: ${agent.name} (${agent.slug})`);
   }
@@ -240,6 +242,13 @@ function setAgentField(agent: Partial<DetectedAgent>, key: string, value: string
     case "description":
       agent.description = unquote(value);
       break;
+    case "type": {
+      const t = unquote(value);
+      if (t === "hermes" || t === "openclaw" || t === "custom") {
+        agent.type = t;
+      }
+      break;
+    }
   }
 }
 
@@ -251,7 +260,7 @@ function finalizeAgent(
     slug: partial.slug!,
     name: partial.name!,
     description: partial.description,
-    type: "custom",
+    type: partial.type ?? "custom",
     adapterConfig: Object.keys(adapterConfig).length > 0 ? adapterConfig : undefined,
   };
 }
