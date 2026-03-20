@@ -83,7 +83,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Research good React markdown renderers (react-markdown, marked, etc.). Add renderMarkdown boolean field to Agent model."
     },
     {

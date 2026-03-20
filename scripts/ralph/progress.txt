@@ -8,6 +8,9 @@
 - App-wide settings stored in `AppSetting` key-value table; fetch via `orpc.settings.getAll`, update via `orpc.settings.update`
 - `orpc.appConfig` returns a computed client-safe config object (smtpConfigured, ssoEnabled, signupsDisabled, etc.)
 - Messages rendered via `localMessages.map(msg => <MessageBubble>)` in `conversations/$id.tsx`; filter display-only via `.filter()` before `.map()`
+- Tailwind prose classes require `@tailwindcss/typography` plugin — added via `@plugin "@tailwindcss/typography"` in `globals.css`
+- `agentSelect` in `packages/api/src/routers/agents.ts` controls which Agent fields are returned to the client — add new fields here
+- `updateMutation` in agent settings has an explicit type annotation on `mutationFn` — update it when adding new fields to the update API
 
 # Ralph Progress Log
 Started: Fri Mar 20 06:51:06 PM UTC 2026
@@ -80,5 +83,25 @@ Started: Fri Mar 20 06:51:06 PM UTC 2026
   - The `ChatMessage` interface is defined locally in the conversation page file (not shared)
   - `useMessagesFromQuery` hook initializes messages from the API query; `useConversationSocket` handles real-time updates
   - Conversation list previews (`lastMessage`) come from the API and are separate from the chat view filter
+  - Manual browser verification still needed
+---
+
+## 2026-03-20 - OPT-005
+- **What was implemented:** Added per-agent markdown rendering toggle (default: enabled). Agent messages are rendered as formatted markdown using react-markdown with remark-gfm for GFM support (tables, strikethrough, task lists, etc.). When disabled, messages display as plain text. Setting persists in the database on the Agent model.
+- **Files changed:**
+  - `packages/db/prisma/schema/agents.prisma` — Added `renderMarkdown Boolean @default(true)` field to Agent model
+  - `packages/api/src/routers/agents.ts` — Added `renderMarkdown` to `agentSelect`, update procedure input, and data object
+  - `apps/web/src/routes/_auth/agents/$slug/index.tsx` — Added "Markdown Rendering" settings card with Switch toggle, updated `updateMutation` type
+  - `apps/web/src/routes/_auth/agents/$slug/conversations/$id.tsx` — Imported react-markdown/remark-gfm, passed `renderMarkdown` prop to `MessageBubble`, conditionally render markdown for agent messages
+  - `packages/ui/src/styles/globals.css` — Added `@plugin "@tailwindcss/typography"` for prose classes
+  - `apps/web/package.json` — Added react-markdown, remark-gfm, @tailwindcss/typography deps
+  - `packages/ui/package.json` — Added @tailwindcss/typography dep
+- **Learnings for future iterations:**
+  - `@tailwindcss/typography` must be installed in the UI package (where globals.css lives) AND declared via `@plugin` in globals.css for Tailwind v4
+  - The `updateMutation` in agent settings page has an explicit TypeScript type annotation on `mutationFn` — you must update this when adding new fields to the update API
+  - `agentSelect` in the agents router controls which fields are returned to the client — new Agent model fields must be added here
+  - `react-markdown` with `remark-gfm` renders GFM (tables, strikethrough, task lists, autolinks) — prose classes from typography plugin handle styling
+  - The `agentData` (from `agentQuery`) is already fetched in ConversationPage and can be used to pass agent-level settings to MessageBubble
+  - Used solved problem `ui/shadcn/dashboard-conventions` for card layout patterns
   - Manual browser verification still needed
 ---
