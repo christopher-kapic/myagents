@@ -359,7 +359,39 @@ async function handleAgentRegister(
     : "custom";
 
   try {
-    // Upsert: create if not exists, update if exists
+    // Check if agent already exists in DB to preserve user-set values
+    const existing = await prisma.agent.findUnique({
+      where: {
+        userId_slug: {
+          userId: connection.userId,
+          slug: payload.slug,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        adapterConfig: true,
+      },
+    });
+
+    // For existing agents, preserve DB name, description, and timeout
+    // (these are user-facing settings that may have been changed via the web UI
+    // while the CLI was offline). CLI-sourced adapter fields like command/shell/streaming
+    // are always updated since they come from the local agent definition.
+    let mergedAdapterConfig: Record<string, unknown> | undefined;
+    if (payload.adapterConfig) {
+      const cliConfig = JSON.parse(JSON.stringify(payload.adapterConfig));
+      if (existing?.adapterConfig && typeof existing.adapterConfig === "object") {
+        const dbConfig = existing.adapterConfig as Record<string, unknown>;
+        // Preserve DB timeout if it was previously set
+        if (dbConfig.timeout !== undefined) {
+          cliConfig.timeout = dbConfig.timeout;
+        }
+      }
+      mergedAdapterConfig = cliConfig;
+    }
+
     const agent = await prisma.agent.upsert({
       where: {
         userId_slug: {
@@ -368,13 +400,14 @@ async function handleAgentRegister(
         },
       },
       update: {
-        name: payload.name,
-        description: payload.description ?? null,
+        // Preserve DB name/description for existing agents
+        name: existing ? undefined : payload.name,
+        description: existing ? undefined : (payload.description ?? null),
         type: agentType,
         nodeId: connection.nodeId,
         status: "online",
-        adapterConfig: payload.adapterConfig
-          ? JSON.parse(JSON.stringify(payload.adapterConfig))
+        adapterConfig: mergedAdapterConfig
+          ? JSON.parse(JSON.stringify(mergedAdapterConfig))
           : undefined,
       },
       create: {
@@ -389,7 +422,13 @@ async function handleAgentRegister(
           ? JSON.parse(JSON.stringify(payload.adapterConfig))
           : undefined,
       },
-      select: { id: true, slug: true, name: true },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        description: true,
+        adapterConfig: true,
+      },
     });
 
     console.log(`[WS] agent registered: ${agent.slug} (${agent.id}) on node ${connection.nodeId}`);
@@ -399,9 +438,20 @@ async function handleAgentRegister(
       data: { agentId: agent.id, status: "online" },
     });
 
+    // Return DB values so CLI can sync its local YAML
+    const dbTimeout = agent.adapterConfig && typeof agent.adapterConfig === "object"
+      ? (agent.adapterConfig as Record<string, unknown>).timeout as number | undefined
+      : undefined;
+
     return createResponseFrame(
       "agent.register",
-      { agentId: agent.id, slug: agent.slug, name: agent.name },
+      {
+        agentId: agent.id,
+        slug: agent.slug,
+        name: agent.name,
+        description: agent.description,
+        timeout: dbTimeout,
+      },
       frame.id,
     );
   } catch (err) {
