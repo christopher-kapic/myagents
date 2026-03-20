@@ -79,7 +79,7 @@ function AgentsPage() {
       ) : (
         <AgentsList
           own={agentsQuery.data?.own ?? []}
-          shared={agentsQuery.data?.shared ?? []}
+          shared={agentsQuery.data?.sharedWithMe ?? []}
         />
       )}
     </div>

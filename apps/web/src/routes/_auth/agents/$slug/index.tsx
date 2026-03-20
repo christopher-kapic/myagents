@@ -471,7 +471,7 @@ function PermissionsTab({
   const agentsData = agentsQuery.data as
     | {
         own: Array<Record<string, unknown>>;
-        shared?: Array<Record<string, unknown>>;
+        sharedWithMe?: Array<Record<string, unknown>>;
       }
     | undefined;
 
@@ -479,7 +479,7 @@ function PermissionsTab({
   const ownAgents = (agentsData?.own ?? []).filter(
     (a) => String(a.id) !== agentId,
   );
-  const sharedAgents = (agentsData?.shared ?? []).map((a) => {
+  const sharedAgents = (agentsData?.sharedWithMe ?? []).map((a) => {
     const displaySlug = a.user
       ? `${String((a.user as Record<string, unknown>).username)}/${String(a.slug)}`
       : String(a.slug);

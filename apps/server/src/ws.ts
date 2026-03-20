@@ -867,7 +867,7 @@ async function handleAgentList(
 
   return createResponseFrame(
     "agent.list",
-    { own, shared: sharedAgents },
+    { own, sharedWithMe: sharedAgents },
     frame.id,
   );
 }

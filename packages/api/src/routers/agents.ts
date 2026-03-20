@@ -117,7 +117,7 @@ export const agentsRouter = {
 
         return {
           own: [],
-          shared: [],
+          sharedWithMe: [],
           permitted: agents,
         };
       }
@@ -147,7 +147,7 @@ export const agentsRouter = {
 
         return {
           own: ownAgents.map(serializeAgent),
-          shared: otherAgents.map(serializeAgent),
+          sharedWithMe: otherAgents.map(serializeAgent),
         };
       }
 
@@ -215,7 +215,7 @@ export const agentsRouter = {
 
       return {
         own: ownAgents.map(serializeAgent),
-        shared: sharedAgents.map(serializeAgent),
+        sharedWithMe: sharedAgents.map(serializeAgent),
       };
     }),
 
