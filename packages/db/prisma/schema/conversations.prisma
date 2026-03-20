@@ -12,11 +12,14 @@ model Conversation {
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   agentId        String
   agent          Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  sharedVia      String?
+  agentShare     AgentShare?      @relation(fields: [sharedVia], references: [id], onDelete: SetNull)
   messages       Message[]
   queuedMessages QueuedMessage[]
 
   @@index([userId])
   @@index([agentId])
+  @@index([sharedVia])
   @@map("conversation")
 }
 

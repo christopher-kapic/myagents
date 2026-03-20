@@ -6,7 +6,8 @@ model AgentShare {
   user      User     @relation("agentShares", fields: [userId], references: [id], onDelete: Cascade)
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt     DateTime       @default(now()) @updatedAt
+  conversations Conversation[]
 
   @@unique([agentId, userId])
   @@index([agentId])
