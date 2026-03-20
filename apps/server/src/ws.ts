@@ -1088,6 +1088,7 @@ async function handleMessageSend(
     senderAgent?: string;
     conversationId?: string;
     content?: string;
+    openclawAgentId?: string;
   };
 
   // Agent-to-agent: node connection with senderAgent and targetAgent
@@ -1115,7 +1116,7 @@ async function handleMessageSend(
     );
   }
 
-  const { agentSlug, content, openclawAgentId } = payload;
+  const { agentSlug, content, openclawAgentId, senderAgent: senderAgentSlug } = payload;
   const userId = connection.userId;
 
   // Look up the target agent
@@ -1131,6 +1132,23 @@ async function handleMessageSend(
       frame.id,
       `Agent "${agentSlug}" not found`,
     );
+  }
+
+  // If senderAgent is specified, look it up so we can attribute the message to the agent
+  let senderAgentRecord: { id: string; slug: string } | null = null;
+  if (senderAgentSlug) {
+    senderAgentRecord = await prisma.agent.findFirst({
+      where: { slug: senderAgentSlug, userId },
+      select: { id: true, slug: true },
+    });
+    if (!senderAgentRecord) {
+      return createResponseFrame(
+        "message.send",
+        undefined,
+        frame.id,
+        `Sender agent "${senderAgentSlug}" not found`,
+      );
+    }
   }
 
   // Check if agent's node is connected
@@ -1182,12 +1200,14 @@ async function handleMessageSend(
     }
   }
 
-  // Save user message to DB
+  // Save message to DB — attribute to agent if senderAgent was specified
+  const messageSenderType = senderAgentRecord ? "agent" : "user";
+  const messageSenderId = senderAgentRecord ? senderAgentRecord.id : userId;
   const message = await prisma.message.create({
     data: {
       conversationId,
-      senderType: "user",
-      senderId: userId,
+      senderType: messageSenderType,
+      senderId: messageSenderId,
       content,
     },
     select: { id: true },
@@ -1200,7 +1220,7 @@ async function handleMessageSend(
     conversationId,
     messageId: message.id,
     content,
-    senderType: "user",
+    senderType: messageSenderType,
     createdAt: new Date().toISOString(),
   });
   const serializedNew = serializeFrame(newMsgFrame);
