@@ -1,13 +1,24 @@
 import { Button } from "@myagents/ui/components/button";
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@myagents/ui/components/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@myagents/ui/components/dropdown-menu";
+import { Input } from "@myagents/ui/components/input";
 import { Skeleton } from "@myagents/ui/components/skeleton";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Bot,
@@ -20,10 +31,12 @@ import {
   Loader2,
   Mic,
   MicOff,
+  MoreVertical,
   PanelLeft,
   Pencil,
   Send,
   Square,
+  Trash2,
   User,
   Wrench,
   X,
@@ -87,6 +100,7 @@ function isCliMetadata(content: string): boolean {
 function ConversationPage() {
   const { slug, id } = Route.useParams();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { connected, sendFrame, subscribe } = useWebSocket();
   const { openDrawer } = useConversationSidebar();
   const [inputValue, setInputValue] = useState("");
@@ -315,6 +329,20 @@ function ConversationPage() {
     },
   });
 
+  // Delete state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  const deleteMutation = useMutation({
+    mutationFn: () => orpc.conversations.delete.call({ id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.conversations.key(),
+      });
+      setShowDeleteDialog(false);
+      navigate({ to: "/agents/$slug", params: { slug } });
+    },
+  });
+
   // Focus input when entering rename mode
   useFocusOnChange(renameInputRef, isRenaming);
 
@@ -450,7 +478,7 @@ function ConversationPage() {
               />
             }
           >
-            <Download className="h-4 w-4" />
+            <MoreVertical className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
@@ -468,6 +496,14 @@ function ConversationPage() {
             >
               <FileJson className="h-4 w-4" />
               Export as JSON
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => setShowDeleteDialog(true)}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete conversation
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -559,6 +595,15 @@ function ConversationPage() {
           </div>
         ))}
       </div>
+
+      {/* Delete confirmation dialog */}
+      <DeleteConversationDialog
+        open={showDeleteDialog}
+        title={title}
+        onClose={() => setShowDeleteDialog(false)}
+        onConfirm={() => deleteMutation.mutate()}
+        isPending={deleteMutation.isPending}
+      />
 
       {/* Input */}
       <div className="border-t px-4 py-3 shrink-0">
@@ -876,6 +921,94 @@ function MessageBubble({
         </span>
       </div>
     </div>
+  );
+}
+
+function DeleteConversationDialog({
+  open,
+  title,
+  onClose,
+  onConfirm,
+  isPending,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  onConfirm: () => void;
+  isPending: boolean;
+}) {
+  const [confirmText, setConfirmText] = useState("");
+  const isConfirmed = confirmText === title;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          onClose();
+          setConfirmText("");
+        }
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete Conversation</DialogTitle>
+          <DialogDescription>
+            This action cannot be undone. This will permanently delete the
+            conversation and all its messages.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <p className="text-sm">
+            Type{" "}
+            <span className="inline-flex items-center gap-1">
+              <span className="font-mono font-medium text-foreground">
+                {title}
+              </span>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(title)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+                title="Copy to clipboard"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-3.5 w-3.5"
+                >
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                </svg>
+              </button>
+            </span>{" "}
+            to confirm.
+          </p>
+          <Input
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder={title}
+            autoComplete="off"
+          />
+        </div>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>
+            Cancel
+          </DialogClose>
+          <Button
+            variant="destructive"
+            disabled={!isConfirmed || isPending}
+            onClick={onConfirm}
+          >
+            {isPending ? "Deleting..." : "Delete Conversation"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
