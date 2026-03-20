@@ -7,6 +7,7 @@
 - Admin route protection: use `beforeLoad` with `context.session.user.role !== "admin"` redirect; use `adminProcedure` for API
 - App-wide settings stored in `AppSetting` key-value table; fetch via `orpc.settings.getAll`, update via `orpc.settings.update`
 - `orpc.appConfig` returns a computed client-safe config object (smtpConfigured, ssoEnabled, signupsDisabled, etc.)
+- Messages rendered via `localMessages.map(msg => <MessageBubble>)` in `conversations/$id.tsx`; filter display-only via `.filter()` before `.map()`
 
 # Ralph Progress Log
 Started: Fri Mar 20 06:51:06 PM UTC 2026
@@ -67,5 +68,17 @@ Started: Fri Mar 20 06:51:06 PM UTC 2026
   - `InvitationsCard` is only shown when `smtpConfigured` is true (from `appConfig`)
   - The `accept` procedure is a `publicProcedure` (no auth required) since it's called from login page
   - `isSmtpConfigured()` from `packages/api/src/lib/email.ts` checks env vars
+  - Manual browser verification still needed
+---
+
+## 2026-03-20 - OPT-004
+- **What was implemented:** Added display-layer filter to hide CLI metadata lines (like "↻ Resumed session") from the chat web UI. Raw messages are preserved in the database.
+- **Files changed:**
+  - `apps/web/src/routes/_auth/agents/$slug/conversations/$id.tsx` — Added `isCliMetadata()` utility and `.filter()` before rendering `MessageBubble` components. Uses a `CLI_METADATA_PREFIXES` array for extensibility.
+- **Learnings for future iterations:**
+  - Messages are rendered via `localMessages.map(msg => <MessageBubble>)` in the conversation page
+  - The `ChatMessage` interface is defined locally in the conversation page file (not shared)
+  - `useMessagesFromQuery` hook initializes messages from the API query; `useConversationSocket` handles real-time updates
+  - Conversation list previews (`lastMessage`) come from the API and are separate from the chat view filter
   - Manual browser verification still needed
 ---

@@ -75,6 +75,13 @@ interface ChatMessage {
   openclawMeta?: OpenClawMeta;
 }
 
+const CLI_METADATA_PREFIXES = ["↻ Resumed session"];
+
+function isCliMetadata(content: string): boolean {
+  const trimmed = content.trim();
+  return CLI_METADATA_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+}
+
 function ConversationPage() {
   const { slug, id } = Route.useParams();
   const queryClient = useQueryClient();
@@ -495,9 +502,11 @@ function ConversationPage() {
           </div>
         )}
 
-        {localMessages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
+        {localMessages
+          .filter((msg) => !isCliMetadata(msg.content))
+          .map((msg) => (
+            <MessageBubble key={msg.id} message={msg} />
+          ))}
 
         {sending &&
           !localMessages.some(

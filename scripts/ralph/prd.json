@@ -66,7 +66,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "This is a display-layer filter. Look at where messages are rendered in the conversation view and add a filter/transform step."
     },
     {
