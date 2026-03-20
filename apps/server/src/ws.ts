@@ -1106,6 +1106,17 @@ async function handleMessageSend(
     });
   }
 
+  // Block node connections from using the user-to-agent chat path.
+  // Agents must use the agent-to-agent path (senderAgent + targetAgent).
+  if (connection.type === "node") {
+    return createResponseFrame(
+      "message.send",
+      undefined,
+      frame.id,
+      "Node connections must use agent-to-agent messaging (provide senderAgent and targetAgent)",
+    );
+  }
+
   // User-to-agent: original flow
   if (!payload?.agentSlug || !payload?.content) {
     return createResponseFrame(
