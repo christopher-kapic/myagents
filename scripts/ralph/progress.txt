@@ -4,6 +4,9 @@
 - `mergeYamlOverrides()` runs before registration to apply local YAML values to detected agents
 - Server pushes config changes to CLI via `agent.configUpdate` frame; CLI saves to YAML via `updateAgentConfig()`
 - Pre-existing typecheck errors in server: `openclawAgentId` property and `web-push` missing types — not introduced by this work
+- Admin route protection: use `beforeLoad` with `context.session.user.role !== "admin"` redirect; use `adminProcedure` for API
+- App-wide settings stored in `AppSetting` key-value table; fetch via `orpc.settings.getAll`, update via `orpc.settings.update`
+- `orpc.appConfig` returns a computed client-safe config object (smtpConfigured, ssoEnabled, signupsDisabled, etc.)
 
 # Ralph Progress Log
 Started: Fri Mar 20 06:51:06 PM UTC 2026
@@ -19,4 +22,27 @@ Started: Fri Mar 20 06:51:06 PM UTC 2026
   - DB `adapterConfig` is a JSON field containing `timeout`, `command`, `shell`, `streaming` — timeout is the user-facing setting, the rest come from CLI detection
   - CLI YAML may be stale if web UI changes were made while CLI was offline — always prefer DB values for user-facing settings
   - The `updateAgentConfig()` function in `agent-config.ts` handles syncing individual fields back to YAML
+---
+
+## 2026-03-20 - OPT-002
+- **What was implemented:** Already fully implemented in the codebase. Verified all acceptance criteria pass:
+  - Admin page at `_auth/settings/admin.tsx` with role-based `beforeLoad` guard
+  - Signup disable toggle using `AppSetting.signupsDisabled` key
+  - Login page shows "Signups are currently disabled" message when disabled
+  - Settings persist in `AppSetting` table via `adminProcedure`-protected `settingsRouter.update`
+  - Better-Auth admin plugin with `databaseHooks.user.create.before` enforces signup restriction
+  - Web typecheck passes clean
+- **Files verified (no changes needed):**
+  - `apps/web/src/routes/_auth/settings/admin.tsx` — Admin page with signup toggle, 2FA policy, invitations, push test
+  - `apps/web/src/routes/login.tsx` — Signup form conditional on `signupsDisabled` and invitation validity
+  - `packages/api/src/routers/settings.ts` — Settings CRUD with admin-only update
+  - `packages/auth/src/index.ts` — Better-Auth config with admin plugin and signup control hooks
+  - `packages/db/prisma/schema/auth.prisma` — AppSetting model
+- **Learnings for future iterations:**
+  - Admin page lives at `_auth/settings/admin.tsx` and is gated by `session.user.role !== "admin"` in `beforeLoad`
+  - `AppSetting` table is a simple key-value store for app-wide config (signupsDisabled, force2fa, etc.)
+  - Use `adminProcedure` (not `protectedProcedure`) for admin-only API routes
+  - `orpc.appConfig.queryOptions()` returns a client-friendly config object (smtpConfigured, ssoEnabled, signupsDisabled, etc.) — distinct from `orpc.settings.getAll` which returns raw key-value pairs
+  - The settings layout (`_auth/settings.tsx`) conditionally shows the Admin tab based on `session.user.role`
+  - Manual browser verification still needed
 ---

@@ -32,7 +32,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Use kctx to research Better-Auth admin capabilities and signup control. May need a system settings table in the database."
     },
     {
