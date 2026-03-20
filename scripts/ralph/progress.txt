@@ -135,6 +135,9 @@ Started: Fri Mar 20 06:51:06 PM UTC 2026
   - `apps/web/src/routes/_auth/agents/$slug/conversations/$id.tsx` — Added `pendingDelivery` to ChatMessage interface, added "Pending delivery — agent offline" indicator in MessageBubble for user messages with pendingDelivery flag
 - **Learnings for future iterations:**
   - `handleAgentRegister` is the single hook point for when an agent comes back online — use it for any reconnect-triggered logic
+- Better-Auth client method for requesting password reset is `authClient.requestPasswordReset()` (NOT `forgetPassword`)
+- Button component in this codebase does NOT support `asChild` — use `<Link>` directly with classes or `<Button onClick={navigate}>` for navigation
+- TanStack Router route tree must be regenerated after adding new route files: `pnpm -F web exec npx @tanstack/router-cli generate`
   - In-memory Maps in ws.ts are appropriate for transient server state with TTLs (vs DB for persistent data)
   - The `message.send` response payload can include additional flags like `queued: true` without breaking existing clients
   - New WebSocket frame methods must be added to the `FrameMethod` z.enum in `packages/shared/src/frames.ts`
@@ -150,5 +153,25 @@ Started: Fri Mar 20 06:51:06 PM UTC 2026
   - The `useMobileKeyboard` hook has two signals: `inputFocused` (focus events) and `keyboardOpen` (viewport shrink). Only `inputFocused` needed the viewport guard since `keyboardOpen` naturally doesn't trigger on desktop.
   - The root layout (`__root.tsx`) consumes `useMobileKeyboard()` to hide both Header and BottomNav — any fix in the hook automatically fixes both.
   - `focusout` doesn't need the width check — it's safe to always clear `inputFocused` on blur regardless of viewport.
+  - Manual browser verification still needed
+---
+
+## 2026-03-20 - OPT-009
+- **What was implemented:** Added password reset flow when SMTP email is configured. Configured Better-Auth's built-in `sendResetPassword` in the auth package to send reset emails via SMTP (only when SMTP env vars are set). Created a new `/reset-password` route with three states: request form (enter email), success confirmation, and set-new-password form (with token from URL). Added a "Forgot password?" link on the login page that only appears when `smtpConfigured` is true (from `appConfig`). Token expires in 1 hour (Better-Auth default).
+- **Files changed:**
+  - `packages/auth/src/index.ts` — Added `nodemailer` import, `isSmtpConfigured()` helper, and `sendResetPassword` config to `emailAndPassword` (conditionally included when SMTP is configured)
+  - `packages/auth/package.json` — Added `nodemailer` and `@types/nodemailer` dependencies
+  - `apps/web/src/routes/reset-password.tsx` — New route with `RequestResetForm`, `NewPasswordForm`, and expired token handling
+  - `apps/web/src/routes/login.tsx` — Added "Forgot password?" link (conditional on `smtpConfigured`), passed `smtpConfigured` prop to `SignInForm`
+  - `apps/web/src/routeTree.gen.ts` — Auto-generated route tree update
+  - `pnpm-lock.yaml` — Updated lockfile
+- **Learnings for future iterations:**
+  - Better-Auth's `sendResetPassword` is a config option on `emailAndPassword` — the endpoint `/request-password-reset` is always registered but only sends email if `sendResetPassword` callback is provided
+  - The client method is `authClient.requestPasswordReset()` (NOT `forgetPassword` as kctx suggested) — mapped from path `/request-password-reset` via CamelCase
+  - `authClient.resetPassword()` takes `{ newPassword, token }` to set the new password
+  - The reset URL flow: user clicks email link → Better-Auth validates token at `/reset-password/:token` → redirects to `redirectTo?token=VALID_TOKEN` or `redirectTo?error=INVALID_TOKEN`
+  - The shadcn Button component in this codebase does NOT support `asChild` prop — use `<Link>` with styling classes or `<Button onClick={navigate}>` instead
+  - TanStack Router route tree must be regenerated after adding new route files: `pnpm -F web exec npx @tanstack/router-cli generate`
+  - The `isSmtpConfigured()` function is now duplicated in `packages/auth/src/index.ts` and `packages/api/src/lib/email.ts` — could be consolidated into a shared util if more packages need it
   - Manual browser verification still needed
 ---

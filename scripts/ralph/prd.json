@@ -150,7 +150,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "Use kctx to research Better-Auth password reset flow. This likely requires email sending infrastructure from OPT-003 (React Email + SMTP). Can be implemented independently if email utils are set up first."
     }
   ]
