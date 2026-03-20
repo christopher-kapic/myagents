@@ -61,6 +61,26 @@ export const auth = betterAuth({
               },
             };
           }
+
+          const signupsDisabled = await prisma.appSetting.findUnique({
+            where: { key: "signupsDisabled" },
+          });
+
+          if (signupsDisabled?.value === "true") {
+            const invitation = await prisma.invitation.findFirst({
+              where: {
+                email: user.email,
+                acceptedAt: { not: null },
+                revokedAt: null,
+                expiresAt: { gt: new Date() },
+              },
+            });
+
+            if (!invitation) {
+              return false;
+            }
+          }
+
           return { data: user };
         },
       },

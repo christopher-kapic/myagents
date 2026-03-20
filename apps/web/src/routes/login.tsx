@@ -13,7 +13,12 @@ import z from "zod";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
 
+const loginSearchSchema = z.object({
+  invitation: z.string().optional(),
+});
+
 export const Route = createFileRoute("/login")({
+  validateSearch: loginSearchSchema,
   beforeLoad: async () => {
     const session = await authClient.getSession();
     if (session.data) {
@@ -24,7 +29,8 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const { invitation: invitationToken } = Route.useSearch();
+  const [mode, setMode] = useState<"signin" | "signup">(invitationToken ? "signup" : "signin");
   const [needs2FA, setNeeds2FA] = useState(false);
   const [totpCode, setTotpCode] = useState("");
   const [isVerifying2FA, setIsVerifying2FA] = useState(false);
@@ -32,11 +38,20 @@ function LoginPage() {
   const { isPending } = authClient.useSession();
   const config = useQuery(orpc.appConfig.queryOptions());
 
+  const invitationResult = useQuery({
+    ...orpc.invitations.accept.queryOptions({ input: { token: invitationToken! } }),
+    enabled: !!invitationToken,
+  });
+
   const ssoEnabled = config.data?.ssoEnabled ?? false;
   const forceSso = config.data?.forceSso ?? false;
   const ssoProviderName = config.data?.ssoProviderName ?? "SSO";
+  const signupsDisabled = config.data?.signupsDisabled ?? false;
 
-  if (isPending || config.isLoading) {
+  const invitationValid = invitationResult.data?.valid ?? false;
+  const invitationEmail = invitationResult.data?.email ?? "";
+
+  if (isPending || config.isLoading || (invitationToken && invitationResult.isLoading)) {
     return (
       <div className="flex min-h-[80vh] items-center justify-center px-4">
         <div className="w-full max-w-md space-y-6">
@@ -144,6 +159,9 @@ function LoginPage() {
     );
   }
 
+  const canSignUp = !signupsDisabled || invitationValid;
+  const showSignupForm = mode === "signup" && canSignUp;
+
   return (
     <div className="flex min-h-[80vh] items-center justify-center px-4">
       <Card className="w-full max-w-md">
@@ -154,7 +172,9 @@ function LoginPage() {
           <CardDescription>
             {mode === "signin"
               ? "Sign in to your account"
-              : "Create a new account to get started"}
+              : invitationValid
+                ? `Create your account for ${invitationEmail}`
+                : "Create a new account to get started"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -175,16 +195,39 @@ function LoginPage() {
           )}
           {mode === "signin" ? (
             <SignInForm onNeeds2FA={() => setNeeds2FA(true)} />
+          ) : showSignupForm ? (
+            <SignUpForm
+              defaultEmail={invitationValid ? invitationEmail : ""}
+              emailReadOnly={invitationValid}
+            />
           ) : (
-            <SignUpForm />
+            <p className="text-center text-sm text-muted-foreground">
+              Signups are currently disabled. Contact an administrator to request an invitation.
+            </p>
           )}
-          <div className="text-center">
-            <Button variant="link" onClick={() => setMode(mode === "signin" ? "signup" : "signin")}>
-              {mode === "signin"
-                ? "Need an account? Sign Up"
-                : "Already have an account? Sign In"}
-            </Button>
-          </div>
+          {canSignUp && (
+            <div className="text-center">
+              <Button variant="link" onClick={() => setMode(mode === "signin" ? "signup" : "signin")}>
+                {mode === "signin"
+                  ? "Need an account? Sign Up"
+                  : "Already have an account? Sign In"}
+              </Button>
+            </div>
+          )}
+          {!canSignUp && mode === "signin" && (
+            <div className="text-center">
+              <Button variant="link" onClick={() => setMode("signup")}>
+                Need an account? Sign Up
+              </Button>
+            </div>
+          )}
+          {!canSignUp && mode === "signup" && (
+            <div className="text-center">
+              <Button variant="link" onClick={() => setMode("signin")}>
+                Already have an account? Sign In
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -284,11 +327,17 @@ function SignInForm({ onNeeds2FA }: { onNeeds2FA: () => void }) {
   );
 }
 
-function SignUpForm() {
+function SignUpForm({
+  defaultEmail,
+  emailReadOnly,
+}: {
+  defaultEmail: string;
+  emailReadOnly: boolean;
+}) {
   const navigate = useNavigate();
 
   const form = useForm({
-    defaultValues: { name: "", email: "", password: "" },
+    defaultValues: { name: "", email: defaultEmail, password: "" },
     onSubmit: async ({ value }) => {
       const result = await authClient.signUp.email({
         email: value.email,
@@ -348,6 +397,8 @@ function SignUpForm() {
               id={field.name}
               name={field.name}
               type="email"
+              readOnly={emailReadOnly}
+              className={emailReadOnly ? "bg-muted" : ""}
               value={field.state.value}
               onBlur={field.handleBlur}
               onChange={(e) => field.handleChange(e.target.value)}

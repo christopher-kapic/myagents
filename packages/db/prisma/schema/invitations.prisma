@@ -1,0 +1,16 @@
+model Invitation {
+  id        String    @id @default(cuid(2))
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @default(now()) @updatedAt
+  email     String
+  tokenHash String    @unique
+  invitedBy String
+  inviter   User      @relation(fields: [invitedBy], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  acceptedAt DateTime?
+  revokedAt  DateTime?
+
+  @@index([invitedBy])
+  @@index([email])
+  @@map("invitation")
+}

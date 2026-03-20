@@ -11,19 +11,21 @@
   },
   "scripts": {},
   "dependencies": {
+    "@myagents/auth": "workspace:*",
+    "@myagents/db": "workspace:*",
+    "@myagents/env": "workspace:*",
     "@orpc/client": "catalog:",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
-    "@myagents/auth": "workspace:*",
-    "@myagents/db": "workspace:*",
-    "@myagents/env": "workspace:*",
     "dotenv": "catalog:",
+    "nodemailer": "^8.0.3",
     "web-push": "^3.6.7",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@myagents/config": "workspace:*",
+    "@types/nodemailer": "^7.0.11",
     "hono": "catalog:",
     "typescript": "^5"
   }

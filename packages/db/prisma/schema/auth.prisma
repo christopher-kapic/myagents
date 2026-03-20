@@ -21,6 +21,7 @@ model User {
   conversations     Conversation[]
   agentPermissions  AgentPermission[]
   apiKeys           ApiKey[]
+  invitations       Invitation[]
 
   @@unique([email])
   @@map("user")
