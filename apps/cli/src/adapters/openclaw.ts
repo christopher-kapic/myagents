@@ -5,12 +5,21 @@ import type { AgentAdapter, AgentStatus, OpenClawAdapterConfig } from "./types.j
 const DEFAULT_TIMEOUT = 120_000; // 2 minutes
 const DEFAULT_GATEWAY_URL = "http://localhost:8000";
 
+export interface OpenClawResponseMeta {
+  provider?: string;
+  model?: string;
+  durationMs?: number;
+  tools?: Array<{ name: string }>;
+  skills?: Array<{ name: string }>;
+}
+
 export class OpenClawAdapter implements AgentAdapter {
   private config: OpenClawAdapterConfig;
   private binaryPath: string;
   private gatewayUrl: string;
   private agentSlug: string;
   private agentId: string | undefined;
+  private lastResponseMeta: OpenClawResponseMeta | null = null;
 
   constructor(config: OpenClawAdapterConfig = {}, agentSlug: string) {
     this.config = config;
@@ -22,6 +31,10 @@ export class OpenClawAdapter implements AgentAdapter {
 
   setAgentId(agentId: string): void {
     this.agentId = agentId;
+  }
+
+  getLastResponseMeta(): OpenClawResponseMeta | null {
+    return this.lastResponseMeta;
   }
 
   /**
@@ -175,6 +188,7 @@ export class OpenClawAdapter implements AgentAdapter {
   }
 
   private async *sendViaSubprocess(message: string): AsyncGenerator<string> {
+    this.lastResponseMeta = null;
     const openclawAgentId = this.agentId ?? this.agentSlug;
     const output = await this.runProcess(["agent", "--agent", openclawAgentId, "--message", message, "--json"]);
 
@@ -187,8 +201,33 @@ export class OpenClawAdapter implements AgentAdapter {
         result?: {
           payloads?: Array<{ text?: string; mediaUrl?: string | null }>;
         };
-        meta?: Record<string, unknown>;
+        meta?: {
+          durationMs?: number;
+          agentMeta?: {
+            provider?: string;
+            model?: string;
+          };
+          systemPromptReport?: {
+            tools?: {
+              entries?: Array<{ name: string }>;
+            };
+            skills?: {
+              entries?: Array<{ name: string }>;
+            };
+          };
+        };
       };
+
+      // Extract metadata from the response
+      if (parsed.meta) {
+        this.lastResponseMeta = {
+          provider: parsed.meta.agentMeta?.provider,
+          model: parsed.meta.agentMeta?.model,
+          durationMs: parsed.meta.durationMs,
+          tools: parsed.meta.systemPromptReport?.tools?.entries?.map((t) => ({ name: t.name })),
+          skills: parsed.meta.systemPromptReport?.skills?.entries?.map((s) => ({ name: s.name })),
+        };
+      }
 
       // OpenClaw CLI returns { result: { payloads: [{ text: "..." }] }, meta: { ... } }
       if (parsed.result?.payloads?.length) {

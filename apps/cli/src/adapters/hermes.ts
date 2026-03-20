@@ -63,13 +63,10 @@ export class HermesAdapter implements AgentAdapter {
 
   async *sendMessage(
     message: string,
-    history: Array<{ role: "user" | "agent"; content: string }>,
+    _history: Array<{ role: "user" | "agent"; content: string }>,
     context?: MessageContext,
   ): AsyncGenerator<string> {
-    // When resuming a conversation, prepend history as context so the LLM
-    // has the full conversation regardless of hermes' internal session state.
-    const prompt = this.buildPromptWithHistory(message, history);
-    const args = ["chat", "-q", prompt, "--quiet"];
+    const args = ["chat", "-q", message, "--quiet"];
 
     // Resume existing hermes session if we have one for this conversation
     const conversationId = context?.conversationId;
@@ -112,28 +109,6 @@ export class HermesAdapter implements AgentAdapter {
         message: err instanceof Error ? err.message : String(err),
       };
     }
-  }
-
-  /**
-   * Build a prompt that includes conversation history as context.
-   * Only prepends history when there are prior messages to provide context.
-   */
-  private buildPromptWithHistory(
-    message: string,
-    history: Array<{ role: "user" | "agent"; content: string }>,
-  ): string {
-    // No history or only the current message — send as-is
-    if (history.length <= 1) return message;
-
-    // Exclude the last entry (the current user message, which is already `message`)
-    const prior = history.slice(0, -1);
-    if (prior.length === 0) return message;
-
-    const formatted = prior
-      .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
-      .join("\n\n");
-
-    return `<conversation_history>\n${formatted}\n</conversation_history>\n\n${message}`;
   }
 
   private getSessionId(conversationId: string): string | undefined {

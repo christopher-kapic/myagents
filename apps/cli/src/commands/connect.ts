@@ -4,6 +4,7 @@ import { WsClient } from "../ws-client.js";
 import { scanForAgents, type DetectedAgent } from "../scanner.js";
 import { createAdapter } from "../adapter-registry.js";
 import type { AgentAdapter } from "../adapters/types.js";
+import { OpenClawAdapter } from "../adapters/openclaw.js";
 import type { Frame } from "@myagents/shared";
 import { log, ensureLogsDir } from "../logger.js";
 import { updateAgentConfig, ensureAgentsInYaml } from "../agent-config.js";
@@ -243,11 +244,21 @@ async function processMessage(
       });
     }
 
+    // Extract openclaw metadata if available
+    let openclawMeta: Record<string, unknown> | undefined;
+    if (adapter instanceof OpenClawAdapter) {
+      const meta = adapter.getLastResponseMeta();
+      if (meta) {
+        openclawMeta = meta as unknown as Record<string, unknown>;
+      }
+    }
+
     // Send the final done message
     client.sendRequest("message.done", {
       conversationId,
       agentSlug,
       content: fullContent,
+      ...(openclawMeta ? { openclawMeta } : {}),
     });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);

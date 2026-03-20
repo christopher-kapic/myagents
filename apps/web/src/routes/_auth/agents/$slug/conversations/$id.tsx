@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Bot,
   Check,
+  ChevronDown,
   Clock,
   Download,
   FileJson,
@@ -24,6 +25,7 @@ import {
   Send,
   Square,
   User,
+  Wrench,
   X,
 } from "lucide-react";
 import {
@@ -31,6 +33,7 @@ import {
   useEffect,
   useRef,
   useState,
+  Fragment,
 } from "react";
 
 import { useVoiceRecording } from "@/hooks/use-voice-recording";
@@ -50,6 +53,14 @@ export const Route = createFileRoute(
   component: ConversationPage,
 });
 
+interface OpenClawMeta {
+  provider?: string;
+  model?: string;
+  durationMs?: number;
+  tools?: Array<{ name: string }>;
+  skills?: Array<{ name: string }>;
+}
+
 interface ChatMessage {
   id: string;
   content: string;
@@ -57,6 +68,7 @@ interface ChatMessage {
   createdAt: string | Date;
   pending?: boolean;
   error?: boolean;
+  openclawMeta?: OpenClawMeta;
 }
 
 function ConversationPage() {
@@ -250,6 +262,7 @@ function ConversationPage() {
           messageId?: string;
           content?: string;
           error?: boolean;
+          openclawMeta?: OpenClawMeta;
         };
         if (payload?.conversationId === id && payload.content) {
           setLocalMessages((prev) => {
@@ -265,6 +278,7 @@ function ConversationPage() {
                   content: payload.content!,
                   pending: false,
                   error: payload.error || undefined,
+                  openclawMeta: payload.openclawMeta,
                 },
               ];
             }
@@ -277,6 +291,7 @@ function ConversationPage() {
                 senderType: "agent",
                 createdAt: new Date().toISOString(),
                 error: payload.error || undefined,
+                openclawMeta: payload.openclawMeta,
               },
             ];
           });
@@ -986,6 +1001,10 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     );
   }
 
+  const meta = message.openclawMeta;
+  const [toolsExpanded, setToolsExpanded] = useState(false);
+  const toolCount = (meta?.tools?.length ?? 0) + (meta?.skills?.length ?? 0);
+
   return (
     <div className="flex items-start gap-3">
       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted shrink-0">
@@ -1007,6 +1026,60 @@ function MessageBubble({ message }: { message: ChatMessage }) {
             {message.content}
           </p>
         </div>
+        {meta && (
+          <div className="mt-1.5 flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+              {meta.model && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5">
+                  {meta.provider && <span className="opacity-60">{meta.provider}/</span>}
+                  {meta.model.replace(/^.*\//, "")}
+                </span>
+              )}
+              {meta.durationMs != null && (
+                <span className="opacity-60">
+                  {(meta.durationMs / 1000).toFixed(1)}s
+                </span>
+              )}
+              {toolCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setToolsExpanded((v) => !v)}
+                  className="inline-flex items-center gap-0.5 rounded-full bg-muted/60 px-2 py-0.5 hover:bg-muted transition-colors"
+                >
+                  <Wrench className="h-2.5 w-2.5" />
+                  <span>{toolCount} tool{toolCount !== 1 ? "s" : ""}</span>
+                  <ChevronDown className={`h-2.5 w-2.5 transition-transform ${toolsExpanded ? "rotate-180" : ""}`} />
+                </button>
+              )}
+            </div>
+            {toolsExpanded && toolCount > 0 && (
+              <div className="rounded-lg bg-muted/40 border border-border/50 px-3 py-2 text-[10px] text-muted-foreground">
+                {meta.tools && meta.tools.length > 0 && (
+                  <div>
+                    <span className="font-medium">Tools:</span>{" "}
+                    {meta.tools.map((t, i) => (
+                      <Fragment key={t.name}>
+                        {i > 0 && <span className="opacity-40"> · </span>}
+                        <span>{t.name}</span>
+                      </Fragment>
+                    ))}
+                  </div>
+                )}
+                {meta.skills && meta.skills.length > 0 && (
+                  <div className={meta.tools?.length ? "mt-1" : ""}>
+                    <span className="font-medium">Skills:</span>{" "}
+                    {meta.skills.map((s, i) => (
+                      <Fragment key={s.name}>
+                        {i > 0 && <span className="opacity-40"> · </span>}
+                        <span>{s.name}</span>
+                      </Fragment>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         <span className="text-[10px] text-muted-foreground mt-1">
           {timeStr}
           {message.pending && (

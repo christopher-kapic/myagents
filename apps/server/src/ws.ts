@@ -294,6 +294,10 @@ async function handleFrame(
       return handleCircuitBreakerReset(frame, connection);
     }
 
+    case "conversation.start": {
+      return handleConversationStart(frame, connection);
+    }
+
     case "agent.status":
     case "auth":
       console.log(`[WS] received ${frame.method} from ${connection.type}`);
@@ -1628,6 +1632,7 @@ async function handleMessageDone(
     conversationId?: string;
     content?: string;
     error?: boolean;
+    openclawMeta?: Record<string, unknown>;
   };
 
   if (!payload?.conversationId || !payload?.content) return null;
@@ -1697,6 +1702,7 @@ async function handleMessageDone(
     messageId,
     content: payload.content,
     error: payload.error || undefined,
+    ...(payload.openclawMeta ? { openclawMeta: payload.openclawMeta } : {}),
   });
   const serialized = serializeFrame(eventFrame);
   for (const client of clientConns) {
@@ -2024,3 +2030,91 @@ apiEvents.onAgentConfigUpdate((event) => {
     // Node may have disconnected between the check and the send
   }
 });
+
+// ─── conversation.start handler ─────────────────────────────────────────────
+
+/**
+ * Handle conversation.start from a CLI node:
+ * An agent proactively starts a new conversation with the user (e.g., heartbeat messages).
+ * Creates a new conversation, saves the agent's message, and notifies user's clients.
+ */
+async function handleConversationStart(
+  frame: Frame,
+  connection: Connection,
+): Promise<Frame | null> {
+  const payload = frame.payload as {
+    agentSlug?: string;
+    content?: string;
+    title?: string;
+  };
+
+  if (!payload?.agentSlug || !payload?.content) {
+    return createResponseFrame("conversation.start", undefined, frame.id, "Missing agentSlug or content");
+  }
+
+  // Look up the agent — allow from both node and client connections
+  const agent = await prisma.agent.findFirst({
+    where: {
+      slug: payload.agentSlug,
+      userId: connection.userId,
+    },
+    select: { id: true, slug: true, name: true },
+  });
+
+  if (!agent) {
+    return createResponseFrame("conversation.start", undefined, frame.id, `Agent "${payload.agentSlug}" not found`);
+  }
+
+  // Create new conversation
+  const conversation = await prisma.conversation.create({
+    data: {
+      userId: connection.userId,
+      agentId: agent.id,
+      title: payload.title || `${agent.name}: ${payload.content.slice(0, 50)}`,
+    },
+    select: { id: true },
+  });
+
+  // Save the agent's message
+  const message = await prisma.message.create({
+    data: {
+      conversationId: conversation.id,
+      senderType: "agent",
+      senderId: agent.id,
+      content: payload.content,
+    },
+    select: { id: true },
+  });
+
+  // Notify user's client connections about the new message
+  const clientConns = connectionRegistry.getClientConnections(connection.userId);
+  const newMsgFrame = createEventFrame("message.new", {
+    conversationId: conversation.id,
+    messageId: message.id,
+    content: payload.content,
+    senderType: "agent",
+    createdAt: new Date().toISOString(),
+  });
+  const serialized = serializeFrame(newMsgFrame);
+  for (const client of clientConns) {
+    if (client.ws.readyState === 1) {
+      client.ws.send(serialized);
+    }
+  }
+
+  // Send push notification
+  void sendAgentResponsePush(
+    connection.userId,
+    agent.name,
+    agent.slug,
+    conversation.id,
+    payload.content,
+  );
+
+  console.log(`[WS] conversation.start: agent "${agent.slug}" created conversation ${conversation.id}`);
+
+  return createResponseFrame("conversation.start", {
+    conversationId: conversation.id,
+    messageId: message.id,
+  }, frame.id);
+}

@@ -20,6 +20,7 @@ export const FrameMethod = z.enum([
   "agent.configUpdate",
   "agent.circuitBreaker.reset",
   "queue.dequeued",
+  "conversation.start",
 ]);
 export type FrameMethod = z.infer<typeof FrameMethod>;
 
@@ -112,6 +113,13 @@ export const AgentListPayload = z.object({
   senderAgentSlug: z.string().optional(),
 });
 export type AgentListPayload = z.infer<typeof AgentListPayload>;
+
+export const ConversationStartPayload = z.object({
+  agentSlug: z.string(),
+  content: z.string(),
+  title: z.string().optional(),
+});
+export type ConversationStartPayload = z.infer<typeof ConversationStartPayload>;
 
 // ─── Frame Parsing ──────────────────────────────────────────────────────────
 
