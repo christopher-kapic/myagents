@@ -35,8 +35,10 @@ import {
   Search,
   Server,
   Settings,
+  Share2,
   Shield,
   Trash2,
+  UserPlus,
   Wifi,
   WifiOff,
   Zap,
@@ -398,6 +400,102 @@ function ConversationsTab({
   );
 }
 
+function ShareDialog({ agentId }: { agentId: string }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+
+  const createShareMutation = useMutation({
+    mutationFn: (shareEmail: string) =>
+      orpc.agentShares.create.call({ agentId, email: shareEmail }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.agentShares.list.queryOptions({ input: { agentId } })
+          .queryKey,
+      });
+      setEmail("");
+      setError("");
+      setOpen(false);
+    },
+    onError: (err: { message?: string }) => {
+      setError(err.message ?? "Failed to share agent");
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    const trimmed = email.trim();
+    if (!trimmed) return;
+    createShareMutation.mutate(trimmed);
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) {
+          setEmail("");
+          setError("");
+        }
+      }}
+    >
+      <DialogTrigger
+        render={
+          <Button size="sm">
+            <UserPlus className="h-4 w-4 mr-1" />
+            Share
+          </Button>
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Share Agent</DialogTitle>
+          <DialogDescription>
+            Enter the email address of the user you want to share this agent
+            with.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              placeholder="user@example.com"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (error) setError("");
+              }}
+              className="autofill:shadow-[inset_0_0_0px_1000px_var(--color-background)]"
+            />
+            {error && (
+              <p className="text-sm text-destructive">{error}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" type="button" />}>
+              Cancel
+            </DialogClose>
+            <Button
+              type="submit"
+              disabled={!email.trim() || createShareMutation.isPending}
+            >
+              {createShareMutation.isPending && (
+                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+              )}
+              Share
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function PermissionsTab({
   agent,
   slug,
@@ -533,6 +631,24 @@ function PermissionsTab({
 
   return (
     <div className="space-y-6">
+      {/* Sharing */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Share2 className="h-4 w-4" />
+                Sharing
+              </CardTitle>
+              <CardDescription>
+                Share this agent with other users by email.
+              </CardDescription>
+            </div>
+            <ShareDialog agentId={agentId} />
+          </div>
+        </CardHeader>
+      </Card>
+
       {/* Can Send To */}
       <Card>
         <CardHeader>
