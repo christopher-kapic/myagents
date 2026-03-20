@@ -104,6 +104,7 @@ function isCliMetadata(content: string): boolean {
 
 function ConversationPage() {
   const { slug, id } = Route.useParams();
+  const isOwn = !slug.includes("/");
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { connected, sendFrame, subscribe } = useWebSocket();
@@ -465,10 +466,15 @@ function ConversationPage() {
               </button>
             </div>
           )}
-          <p className="text-xs text-muted-foreground">
-            {slug}
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <span>{slug}</span>
+            {!isOwn && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                Shared
+              </span>
+            )}
             {!connected && (
-              <span className="ml-2 text-yellow-600 dark:text-yellow-400">
+              <span className="text-yellow-600 dark:text-yellow-400">
                 (reconnecting...)
               </span>
             )}

@@ -230,7 +230,7 @@ function AgentDetailPage() {
 
       {/* Tab Content */}
       {activeTab === "conversations" ? (
-        <ConversationsTab agentId={String(agent.id)} slug={slug} />
+        <ConversationsTab agentId={String(agent.id)} slug={slug} isOwn={isOwn} />
       ) : activeTab === "permissions" ? (
         <PermissionsTab agent={agent} slug={slug} />
       ) : (
@@ -243,9 +243,11 @@ function AgentDetailPage() {
 function ConversationsTab({
   agentId,
   slug,
+  isOwn,
 }: {
   agentId: string;
   slug: string;
+  isOwn: boolean;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -302,10 +304,16 @@ function ConversationsTab({
 
   return (
     <div className="space-y-4">
+      {!isOwn && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300">
+          <Share2 className="h-4 w-4 shrink-0" />
+          <p>You&apos;re viewing a shared agent. Only your conversations are shown.</p>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 overflow-x-auto">
         <h2 className="text-lg font-medium shrink-0">Conversations</h2>
         <div className="flex items-center gap-2 overflow-x-auto shrink-0">
-          {conversations.length > 0 && (
+          {isOwn && conversations.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
