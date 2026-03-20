@@ -26,6 +26,7 @@ import {
   ArrowLeft,
   Bot,
   Clock,
+  Copy,
   Download,
   FileJson,
   FileText,
@@ -41,6 +42,7 @@ import {
   UserPlus,
   Wifi,
   WifiOff,
+  X,
   Zap,
 } from "lucide-react";
 import { useState } from "react";
@@ -496,6 +498,96 @@ function ShareDialog({ agentId }: { agentId: string }) {
   );
 }
 
+function RemoveShareDialog({
+  shareId,
+  displayName,
+  onConfirm,
+  isPending,
+}: {
+  shareId: string;
+  displayName: string;
+  onConfirm: () => void;
+  isPending: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+
+  const isConfirmed = confirmText === displayName;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(displayName);
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setConfirmText("");
+      }}
+    >
+      <DialogTrigger
+        render={
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" />
+        }
+      >
+        <X className="h-4 w-4" />
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Remove Share</DialogTitle>
+          <DialogDescription>
+            This will revoke access for this user. Any conversations they created
+            via this share will remain but they will no longer be able to access
+            the agent.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <div className="flex items-center gap-2">
+            <code className="flex-1 rounded-md border bg-muted px-2 py-1 text-sm truncate">
+              {displayName}
+            </code>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleCopy}
+              type="button"
+              aria-label="Copy name"
+              className="shrink-0"
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="text-sm">
+            Type the name above to confirm.
+          </p>
+          <Input
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            placeholder="Type the name to confirm"
+            autoComplete="off"
+          />
+        </div>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>
+            Cancel
+          </DialogClose>
+          <Button
+            variant="destructive"
+            disabled={!isConfirmed || isPending}
+            onClick={() => {
+              onConfirm();
+              setOpen(false);
+            }}
+          >
+            {isPending ? "Removing..." : "Remove"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function PermissionsTab({
   agent,
   slug,
@@ -506,6 +598,11 @@ function PermissionsTab({
   const queryClient = useQueryClient();
   const agentId = String(agent.id);
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Fetch shares for this agent
+  const sharesQuery = useQuery(
+    orpc.agentShares.list.queryOptions({ input: { agentId } }),
+  );
 
   // Fetch current permissions
   const permissionsQuery = useQuery(
@@ -629,6 +726,37 @@ function PermissionsTab({
     }
   };
 
+  const shares = (sharesQuery.data ?? []) as Array<{
+    id: string;
+    agentId: string;
+    userId: string;
+    active: boolean;
+    createdAt: Date;
+    user: { id: string; name: string; email: string };
+  }>;
+
+  const toggleShareMutation = useMutation({
+    mutationFn: ({ shareId, active }: { shareId: string; active: boolean }) =>
+      orpc.agentShares.toggle.call({ shareId, active }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.agentShares.list.queryOptions({ input: { agentId } })
+          .queryKey,
+      });
+    },
+  });
+
+  const removeShareMutation = useMutation({
+    mutationFn: (shareId: string) =>
+      orpc.agentShares.remove.call({ shareId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.agentShares.list.queryOptions({ input: { agentId } })
+          .queryKey,
+      });
+    },
+  });
+
   return (
     <div className="space-y-6">
       {/* Sharing */}
@@ -647,6 +775,57 @@ function PermissionsTab({
             <ShareDialog agentId={agentId} />
           </div>
         </CardHeader>
+        <CardContent>
+          {sharesQuery.isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : shares.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">
+              No shares yet. Share this agent with other users by email.
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {shares.map((share) => (
+                <div
+                  key={share.id}
+                  className="flex items-center justify-between rounded-lg border px-4 py-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium truncate">
+                      {share.user.name ?? share.user.email}
+                    </p>
+                    {share.user.name && (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {share.user.email}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <Switch
+                      checked={share.active}
+                      onCheckedChange={(checked) =>
+                        toggleShareMutation.mutate({
+                          shareId: share.id,
+                          active: checked,
+                        })
+                      }
+                      disabled={toggleShareMutation.isPending}
+                    />
+                    <RemoveShareDialog
+                      shareId={share.id}
+                      displayName={share.user.name ?? share.user.email}
+                      onConfirm={() => removeShareMutation.mutate(share.id)}
+                      isPending={removeShareMutation.isPending}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
       </Card>
 
       {/* Can Send To */}
