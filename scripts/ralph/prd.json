@@ -131,7 +131,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Look for the navbar hide-on-focus logic — likely uses a resize/focus listener or CSS. Add a viewport width check so it only triggers on mobile."
     },
     {

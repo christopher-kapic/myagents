@@ -141,3 +141,14 @@ Started: Fri Mar 20 06:51:06 PM UTC 2026
   - The `sendFrame` call in the conversation page gets a response frame that is handled in `use-conversation-socket.ts` — good separation of concerns
   - Manual browser verification still needed
 ---
+
+## 2026-03-20 - OPT-008
+- **What was implemented:** Fixed navbar hiding on input focus for desktop viewports. Added a `window.innerWidth < 768` check in the `useMobileKeyboard` hook's `focusin` handler so `inputFocused` only triggers on mobile viewports. The `keyboardOpen` state (visualViewport shrink detection) naturally doesn't trigger on desktop since there's no virtual keyboard, so no change was needed there.
+- **Files changed:**
+  - `apps/web/src/hooks/use-mobile-keyboard.ts` — Added `MD_BREAKPOINT = 768` constant and viewport width check in `onFocusIn` handler
+- **Learnings for future iterations:**
+  - The `useMobileKeyboard` hook has two signals: `inputFocused` (focus events) and `keyboardOpen` (viewport shrink). Only `inputFocused` needed the viewport guard since `keyboardOpen` naturally doesn't trigger on desktop.
+  - The root layout (`__root.tsx`) consumes `useMobileKeyboard()` to hide both Header and BottomNav — any fix in the hook automatically fixes both.
+  - `focusout` doesn't need the width check — it's safe to always clear `inputFocused` on blur regardless of viewport.
+  - Manual browser verification still needed
+---
