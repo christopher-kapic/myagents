@@ -51,6 +51,12 @@ function parseSessionId(output: string): { response: string; sessionId: string |
   return { response: output, sessionId: null };
 }
 
+/**
+ * Strip CLI metadata lines (e.g. "↻ Resumed session ...") from the beginning
+ * of hermes output so they don't get sent as part of the response content.
+ */
+const CLI_METADATA_PATTERN = /^↻ Resumed session[^\n]*\n?/;
+
 export class HermesAdapter implements AgentAdapter {
   private config: HermesAdapterConfig;
   private binaryPath: string;
@@ -97,7 +103,10 @@ export class HermesAdapter implements AgentAdapter {
       this.setSessionId(conversationId, sessionId);
     }
 
-    yield response;
+    // Strip CLI metadata lines (e.g. "↻ Resumed session ...") so they
+    // don't get sent as message content and accidentally hide the response
+    const cleaned = response.replace(CLI_METADATA_PATTERN, "").trim();
+    yield cleaned || response;
   }
 
   async getStatus(): Promise<AgentStatus> {

@@ -95,7 +95,11 @@ const CLI_METADATA_PREFIXES = ["↻ Resumed session"];
 
 function isCliMetadata(content: string): boolean {
   const trimmed = content.trim();
-  return CLI_METADATA_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+  // Only filter messages that are entirely CLI metadata (a single short line),
+  // not messages that happen to start with metadata followed by actual content
+  return CLI_METADATA_PREFIXES.some(
+    (prefix) => trimmed.startsWith(prefix) && !trimmed.includes("\n"),
+  );
 }
 
 function ConversationPage() {

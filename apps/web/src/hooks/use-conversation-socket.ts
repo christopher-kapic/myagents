@@ -145,11 +145,12 @@ export function useConversationSocket({
           setSending(false);
           if (!payload.error) {
             queryClient.invalidateQueries({
-              queryKey: orpc.conversations.list.queryOptions({
-                input: { agentId: "" },
-              }).queryKey[0]
-                ? undefined
-                : undefined,
+              predicate: (query) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey.some(
+                  (k) =>
+                    typeof k === "string" && k.includes("conversations"),
+                ),
             });
           }
         }
