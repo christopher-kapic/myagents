@@ -10,7 +10,7 @@ import { Input } from "@myagents/ui/components/input";
 import { Skeleton } from "@myagents/ui/components/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { Bot, Search, Wifi, WifiOff } from "lucide-react";
+import { Bot, Search, Share2, Wifi, WifiOff } from "lucide-react";
 import { useState } from "react";
 
 import { orpc } from "@/utils/orpc";
@@ -191,6 +191,12 @@ function AgentCard({
           >
             {String(agent.type)}
           </span>
+          {showOwner && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+              <Share2 className="h-3 w-3" />
+              Shared
+            </span>
+          )}
         </div>
         <p className="text-xs text-muted-foreground truncate mt-0.5">
           <span className="font-mono">{slug}</span>

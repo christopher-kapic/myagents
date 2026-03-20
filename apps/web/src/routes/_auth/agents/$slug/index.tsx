@@ -133,6 +133,12 @@ function AgentDetailPage() {
             >
               {String(agent.type)}
             </span>
+            {!isOwn && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                <Share2 className="h-3 w-3" />
+                Shared
+              </span>
+            )}
             <div className="flex items-center gap-1">
               {isOnline ? (
                 <Wifi className="h-4 w-4 text-green-500" />
