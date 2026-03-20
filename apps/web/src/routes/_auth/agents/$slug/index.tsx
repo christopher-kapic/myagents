@@ -806,8 +806,10 @@ function SettingsTab({
     const config = agent.adapterConfig as Record<string, unknown> | null;
     return (config?.timeout as number) ?? 120000;
   })();
-  const currentTimeoutMin = currentTimeoutMs / 60000;
-  const [timeoutMin, setTimeoutMin] = useState(currentTimeoutMin);
+  const currentTimeoutSeconds = Math.round(currentTimeoutMs / 1000);
+  const [timeoutHours, setTimeoutHours] = useState(Math.floor(currentTimeoutSeconds / 3600));
+  const [timeoutMinutes, setTimeoutMinutes] = useState(Math.floor((currentTimeoutSeconds % 3600) / 60));
+  const [timeoutSeconds, setTimeoutSeconds] = useState(currentTimeoutSeconds % 60);
   const isBuiltInType = agent.type === "hermes" || agent.type === "openclaw";
   const isOpenClaw = agent.type === "openclaw";
   const adapterConfig = agent.adapterConfig as Record<string, unknown> | null;
@@ -900,11 +902,14 @@ function SettingsTab({
     name !== String(agent.name) ||
     description !== (agent.description ? String(agent.description) : "");
 
-  const handleSaveTimeout = () => {
-    timeoutMutation.mutate({ timeout: Math.round(timeoutMin * 60000) });
-  };
+  const totalTimeoutSeconds = timeoutHours * 3600 + timeoutMinutes * 60 + timeoutSeconds;
+  const isTimeoutValid = totalTimeoutSeconds >= 30 && totalTimeoutSeconds <= 604800;
+  const hasTimeoutChanges = totalTimeoutSeconds !== currentTimeoutSeconds;
 
-  const hasTimeoutChanges = timeoutMin !== currentTimeoutMin;
+  const handleSaveTimeout = () => {
+    if (!isTimeoutValid) return;
+    timeoutMutation.mutate({ timeout: totalTimeoutSeconds * 1000 });
+  };
 
   const hasRateLimitChanges =
     rateLimitPerMin !== (Number(agent.rateLimitPerMin) || 60) ||
@@ -1216,26 +1221,55 @@ function SettingsTab({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <label htmlFor="timeout" className="text-sm font-medium">
-              Timeout (minutes)
-            </label>
-            <Input
-              id="timeout"
-              type="number"
-              min={0.5}
-              max={1440}
-              step={0.5}
-              value={timeoutMin}
-              onChange={(e) => setTimeoutMin(Number(e.target.value) || 0.5)}
-            />
+            <label className="text-sm font-medium">Timeout</label>
+            <div className="flex items-center gap-2">
+              <div className="flex flex-col items-center gap-1">
+                <Input
+                  id="timeout-hours"
+                  type="number"
+                  min={0}
+                  max={168}
+                  className="w-20 text-center"
+                  value={timeoutHours}
+                  onChange={(e) => setTimeoutHours(Math.max(0, Math.min(168, parseInt(e.target.value) || 0)))}
+                />
+                <span className="text-xs text-muted-foreground">hours</span>
+              </div>
+              <span className="text-lg font-medium pb-5">:</span>
+              <div className="flex flex-col items-center gap-1">
+                <Input
+                  id="timeout-minutes"
+                  type="number"
+                  min={0}
+                  max={59}
+                  className="w-20 text-center"
+                  value={timeoutMinutes}
+                  onChange={(e) => setTimeoutMinutes(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+                />
+                <span className="text-xs text-muted-foreground">minutes</span>
+              </div>
+              <span className="text-lg font-medium pb-5">:</span>
+              <div className="flex flex-col items-center gap-1">
+                <Input
+                  id="timeout-seconds"
+                  type="number"
+                  min={0}
+                  max={59}
+                  className="w-20 text-center"
+                  value={timeoutSeconds}
+                  onChange={(e) => setTimeoutSeconds(Math.max(0, Math.min(59, parseInt(e.target.value) || 0)))}
+                />
+                <span className="text-xs text-muted-foreground">seconds</span>
+              </div>
+            </div>
             <p className="text-xs text-muted-foreground">
-              Value between 0.5 and 1440 minutes (24 hours). Default: 2 minutes.
+              Maximum 168 hours (7 days). Minimum 30 seconds. Default: 2 minutes.
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Button
               onClick={handleSaveTimeout}
-              disabled={!hasTimeoutChanges || timeoutMutation.isPending}
+              disabled={!hasTimeoutChanges || !isTimeoutValid || timeoutMutation.isPending}
             >
               {timeoutMutation.isPending ? "Saving..." : "Save Timeout"}
             </Button>
