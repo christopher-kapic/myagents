@@ -117,20 +117,52 @@ export const conversationsRouter = {
       const userId = context.session.user.id;
       const admin = isAdmin(context);
 
-      // Verify the agent belongs to the user (admin can access any agent)
+      // Verify the agent belongs to the user, is shared with them, or admin
       const agent = await prisma.agent.findUnique({
         where: { id: input.agentId },
         select: { userId: true },
       });
 
-      if (!agent || (!admin && agent.userId !== userId)) {
+      if (!agent) {
         throw new ORPCError("NOT_FOUND", {
           message: "Agent not found",
         });
       }
 
+      const isOwner = agent.userId === userId;
+
+      // Build the where clause based on access level
+      let conversationWhere: Record<string, unknown>;
+
+      if (admin) {
+        // Admin sees all conversations for the agent
+        conversationWhere = { agentId: input.agentId };
+      } else if (isOwner) {
+        // Owner sees all conversations on their agent
+        conversationWhere = { agentId: input.agentId };
+      } else {
+        // Non-owner: check for an active share
+        const share = await prisma.agentShare.findFirst({
+          where: {
+            agentId: input.agentId,
+            userId,
+            active: true,
+          },
+          select: { id: true },
+        });
+
+        if (!share) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Agent not found",
+          });
+        }
+
+        // Share recipient sees only conversations stamped with their share ID
+        conversationWhere = { agentId: input.agentId, sharedVia: share.id };
+      }
+
       const conversations = await prisma.conversation.findMany({
-        where: admin ? { agentId: input.agentId } : { userId, agentId: input.agentId },
+        where: conversationWhere,
         select: {
           ...conversationSelect,
           messages: {
