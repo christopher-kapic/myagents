@@ -286,7 +286,18 @@ export class OpenClawAdapter implements AgentAdapter {
           return;
         }
         if (code !== 0) {
-          const errorDetail = stderr.trim() || `Process exited with code ${code}`;
+          // OpenClaw often reports errors in stdout (especially with --json),
+          // so check stdout when stderr is empty
+          let errorDetail = stderr.trim();
+          if (!errorDetail && stdout.trim()) {
+            try {
+              const parsed = JSON.parse(stdout.trim()) as { error?: string; message?: string; summary?: string };
+              errorDetail = parsed.error ?? parsed.message ?? parsed.summary ?? stdout.trim().slice(0, 500);
+            } catch {
+              errorDetail = stdout.trim().slice(0, 500);
+            }
+          }
+          errorDetail = errorDetail || `Process exited with code ${code}`;
           reject(new Error(`OpenClaw error (exit code ${code}): ${errorDetail}`));
           return;
         }

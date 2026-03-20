@@ -39,6 +39,7 @@ model Message {
   senderType     SenderType
   senderId       String
   content        String
+  error          Boolean      @default(false)
   createdAt      DateTime     @default(now())
 
   @@index([conversationId])

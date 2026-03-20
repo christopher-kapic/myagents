@@ -1651,29 +1651,29 @@ async function handleMessageDone(
   let messageId: string | undefined;
 
   if (payload.error) {
-    // Error responses: don't save to DB, just forward to clients
     console.warn(
       `[WS] agent error for conversation ${payload.conversationId}: ${payload.content}`,
     );
-  } else {
-    // Save agent message to DB
-    const message = await prisma.message.create({
-      data: {
-        conversationId: payload.conversationId,
-        senderType: "agent",
-        senderId: conversation.agentId,
-        content: payload.content,
-      },
-      select: { id: true },
-    });
-    messageId = message.id;
-
-    // Update conversation updatedAt
-    await prisma.conversation.update({
-      where: { id: payload.conversationId },
-      data: { updatedAt: new Date() },
-    });
   }
+
+  // Save agent message to DB (including errors so they persist across page loads)
+  const message = await prisma.message.create({
+    data: {
+      conversationId: payload.conversationId,
+      senderType: "agent",
+      senderId: conversation.agentId,
+      content: payload.content,
+      error: payload.error || false,
+    },
+    select: { id: true },
+  });
+  messageId = message.id;
+
+  // Update conversation updatedAt
+  await prisma.conversation.update({
+    where: { id: payload.conversationId },
+    data: { updatedAt: new Date() },
+  });
 
   // Check if this is an A2A conversation — route done event to sender agent's node
   const a2aInfo = a2aConversations.get(payload.conversationId);
