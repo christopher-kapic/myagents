@@ -176,9 +176,7 @@ function ConversationPage() {
       setNextCursor(data.nextCursor);
       // If the last message is from the user, the agent is likely still working
       const last = msgs[msgs.length - 1];
-      if (last && last.senderType === "user") {
-        setSending(true);
-      }
+      setSending(last?.senderType === "user");
     }
   }, [messagesQuery.data]);
 
