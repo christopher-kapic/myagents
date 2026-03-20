@@ -828,7 +828,7 @@ function ConversationPage() {
             </button>
           </div>
         )}
-        {isOpenClaw && availableOpenClawAgents.length > 1 && (
+        {isOpenClaw && availableOpenClawAgents.length >= 1 && (
           <div className="flex items-center gap-2 max-w-4xl mx-auto mb-2">
             <label className="text-xs text-muted-foreground shrink-0">Agent:</label>
             <select

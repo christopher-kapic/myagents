@@ -180,7 +180,27 @@ export class OpenClawAdapter implements AgentAdapter {
 
     // Parse JSON output to extract the response text
     try {
-      const parsed = JSON.parse(output) as { response?: string; content?: string; text?: string };
+      const parsed = JSON.parse(output) as {
+        response?: string;
+        content?: string;
+        text?: string;
+        result?: {
+          payloads?: Array<{ text?: string; mediaUrl?: string | null }>;
+        };
+        meta?: Record<string, unknown>;
+      };
+
+      // OpenClaw CLI returns { result: { payloads: [{ text: "..." }] }, meta: { ... } }
+      if (parsed.result?.payloads?.length) {
+        const texts = parsed.result.payloads
+          .map((p) => p.text)
+          .filter(Boolean);
+        if (texts.length > 0) {
+          yield texts.join("\n\n");
+          return;
+        }
+      }
+
       const text = parsed.response ?? parsed.content ?? parsed.text ?? output;
       yield text;
     } catch {
