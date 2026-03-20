@@ -15,10 +15,12 @@
     "@myagents/env": "workspace:*",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
+    "nodemailer": "^8.0.3",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@myagents/config": "workspace:*",
+    "@types/nodemailer": "^7.0.11",
     "typescript": "^5"
   }
 }

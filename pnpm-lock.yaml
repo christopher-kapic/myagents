@@ -388,6 +388,9 @@ importers:
       dotenv:
         specifier: 'catalog:'
         version: 17.3.1
+      nodemailer:
+        specifier: ^8.0.3
+        version: 8.0.3
       zod:
         specifier: 'catalog:'
         version: 4.3.6
@@ -395,6 +398,9 @@ importers:
       '@myagents/config':
         specifier: workspace:*
         version: link:../config
+      '@types/nodemailer':
+        specifier: ^7.0.11
+        version: 7.0.11
       typescript:
         specifier: ^5
         version: 5.9.3
