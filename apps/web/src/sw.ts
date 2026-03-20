@@ -1,5 +1,8 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
+import { registerRoute } from "workbox-routing";
+import { CacheFirst } from "workbox-strategies";
+import { ExpirationPlugin } from "workbox-expiration";
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<string | { url: string; revision: string | null }>;
@@ -8,6 +11,42 @@ declare const self: ServiceWorkerGlobalScope & {
 // Workbox precaching (injected by vite-plugin-pwa)
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
+
+// --- Runtime Caching ---
+
+// Cache large assets (WASM, workers) that exceed the precache size limit.
+// These have content hashes in their filenames so CacheFirst is safe.
+registerRoute(
+  ({ url }) => url.pathname.endsWith(".wasm"),
+  new CacheFirst({
+    cacheName: "wasm-cache",
+    plugins: [
+      new ExpirationPlugin({ maxEntries: 5, maxAgeSeconds: 60 * 60 * 24 * 90 }),
+    ],
+  }),
+);
+
+registerRoute(
+  ({ url }) => url.pathname.includes("worker") && url.pathname.endsWith(".js"),
+  new CacheFirst({
+    cacheName: "worker-cache",
+    plugins: [
+      new ExpirationPlugin({ maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 90 }),
+    ],
+  }),
+);
+
+// Cache font files
+registerRoute(
+  ({ url }) =>
+    url.pathname.endsWith(".woff2") || url.pathname.endsWith(".woff"),
+  new CacheFirst({
+    cacheName: "font-cache",
+    plugins: [
+      new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 }),
+    ],
+  }),
+);
 
 // --- Offline Fallback ---
 

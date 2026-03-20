@@ -22,6 +22,34 @@ function versionPlugin() {
 }
 
 export default defineConfig({
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    "react-vendor": [
+                        "react",
+                        "react/jsx-runtime",
+                        "react-dom",
+                        "react-dom/client",
+                    ],
+                    tanstack: [
+                        "@tanstack/react-router",
+                        "@tanstack/react-query",
+                        "@tanstack/react-form",
+                    ],
+                    ui: ["lucide-react", "sonner", "next-themes"],
+                    markdown: ["react-markdown", "remark-gfm"],
+                    orpc: [
+                        "@orpc/client",
+                        "@orpc/server",
+                        "@orpc/tanstack-query",
+                    ],
+                    auth: ["better-auth"],
+                    zod: ["zod"],
+                },
+            },
+        },
+    },
     plugins: [
         tailwindcss(),
         tanstackRouter({}),
