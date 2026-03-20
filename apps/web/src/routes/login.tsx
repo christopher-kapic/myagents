@@ -5,7 +5,7 @@ import { Label } from "@myagents/ui/components/label";
 import { Skeleton } from "@myagents/ui/components/skeleton";
 import { useForm } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import z from "zod";
@@ -47,6 +47,7 @@ function LoginPage() {
   const forceSso = config.data?.forceSso ?? false;
   const ssoProviderName = config.data?.ssoProviderName ?? "SSO";
   const signupsDisabled = config.data?.signupsDisabled ?? false;
+  const smtpConfigured = config.data?.smtpConfigured ?? false;
 
   const invitationValid = invitationResult.data?.valid ?? false;
   const invitationEmail = invitationResult.data?.email ?? "";
@@ -194,7 +195,7 @@ function LoginPage() {
             </>
           )}
           {mode === "signin" ? (
-            <SignInForm onNeeds2FA={() => setNeeds2FA(true)} />
+            <SignInForm onNeeds2FA={() => setNeeds2FA(true)} smtpConfigured={smtpConfigured} />
           ) : showSignupForm ? (
             <SignUpForm
               defaultEmail={invitationValid ? invitationEmail : ""}
@@ -234,7 +235,7 @@ function LoginPage() {
   );
 }
 
-function SignInForm({ onNeeds2FA }: { onNeeds2FA: () => void }) {
+function SignInForm({ onNeeds2FA, smtpConfigured }: { onNeeds2FA: () => void; smtpConfigured: boolean }) {
   const navigate = useNavigate();
 
   const form = useForm({
@@ -313,6 +314,14 @@ function SignInForm({ onNeeds2FA }: { onNeeds2FA: () => void }) {
           </div>
         )}
       </form.Field>
+
+      {smtpConfigured && (
+        <div className="text-right">
+          <Link to="/reset-password" className="text-sm text-primary underline">
+            Forgot password?
+          </Link>
+        </div>
+      )}
 
       <form.Subscribe
         selector={(state) => ({ canSubmit: state.canSubmit, isSubmitting: state.isSubmitting })}

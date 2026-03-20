@@ -206,6 +206,33 @@ function handleFrame(frame: Frame, client: WsClient): void {
       }
       break;
     }
+    case "agent.register": {
+      // Server responds with authoritative DB values — sync them locally
+      if (frame.type === "res" && frame.payload) {
+        const payload = frame.payload as Record<string, unknown>;
+        const slug = payload["slug"] as string | undefined;
+        const name = payload["name"] as string | undefined;
+        const description = payload["description"] as string | undefined;
+        const timeout = payload["timeout"] as number | undefined;
+
+        if (slug) {
+          const changes = updateAgentConfig(slug, { name, description, timeout });
+          if (changes.length > 0) {
+            console.log(`Synced DB settings for "${slug}": ${changes.join(", ")}`);
+            log("info", `Synced DB settings for "${slug}": ${changes.join(", ")}`);
+          }
+
+          // Update in-memory adapter timeout from DB
+          if (timeout !== undefined) {
+            const adapter = agentAdapters.get(slug);
+            if (adapter?.setTimeout) {
+              adapter.setTimeout(timeout);
+            }
+          }
+        }
+      }
+      break;
+    }
     case "agent.status": {
       console.log(`Agent status update: ${JSON.stringify(frame.payload)}`);
       break;

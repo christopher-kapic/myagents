@@ -818,7 +818,7 @@ function SettingsTab({
   const [openclawAgentId, setOpenclawAgentId] = useState(currentOpenClawAgentId);
 
   const updateMutation = useMutation({
-    mutationFn: (data: { slug?: string; name?: string; description?: string | null }) =>
+    mutationFn: (data: { slug?: string; name?: string; description?: string | null; renderMarkdown?: boolean }) =>
       orpc.agents.update.call({ id: String(agent.id), ...data }),
     onSuccess: (result) => {
       const updated = result as Record<string, unknown>;
@@ -1283,6 +1283,36 @@ function SettingsTab({
                 Failed to save
               </span>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Markdown Rendering */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Markdown Rendering
+          </CardTitle>
+          <CardDescription>
+            Render agent messages as formatted markdown (headings, bold, code
+            blocks, lists, etc.) instead of plain text.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={agent.renderMarkdown !== false}
+              onCheckedChange={(checked) => {
+                updateMutation.mutate({ renderMarkdown: checked });
+              }}
+              disabled={updateMutation.isPending}
+            />
+            <span className="text-sm">
+              {agent.renderMarkdown !== false
+                ? "Markdown enabled"
+                : "Plain text only"}
+            </span>
           </div>
         </CardContent>
       </Card>

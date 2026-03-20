@@ -39,6 +39,7 @@ model Agent {
   user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   status        AgentStatus @default(offline)
   adapterConfig          Json?
+  renderMarkdown         Boolean     @default(true)
   shared                 Boolean     @default(false)
   rateLimitPerMin        Int         @default(60)
   circuitBreakerThreshold Int        @default(10)

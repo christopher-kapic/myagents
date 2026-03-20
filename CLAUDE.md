@@ -143,4 +143,6 @@ For spacing systems, typography scales, visual hierarchy, and shadow/border conv
 
 ### Prisma
 
+**Do NOT run `prisma migrate dev` or `db:migrate`.** The Docker container runs `prisma db push` on deploy. After schema changes, run `pnpm -F @myagents/db db:generate` to regenerate the client locally.
+
 For schema naming conventions, relationship patterns, and optimization strategies, see solved problem `prisma/schema-guidelines`.

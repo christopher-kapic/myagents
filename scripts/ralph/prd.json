@@ -1,665 +1,157 @@
 {
   "project": "MyAgents",
-  "branchName": "ralph/myagents-full-build",
-  "description": "MyAgents - Unified AI agent interaction hub with WebSocket CLI connector, agent-to-agent messaging, permissions, voice input, and quality-of-life features",
+  "branchName": "ralph/optimizations-batch",
+  "description": "MyAgents optimizations - persistence fixes, admin controls, chat UI improvements, and quality-of-life enhancements",
   "userStories": [
     {
-      "id": "US-001",
-      "title": "Add Node and Agent models to Prisma schema",
-      "description": "As a developer, I need database models for connected machines (nodes) and registered agents so the system can track agent infrastructure.",
+      "id": "OPT-001",
+      "title": "Persist agent display names and timeout settings across CLI restarts",
+      "description": "As a user, I want my agent display names and timeout settings to persist when I restart the CLI, so I don't have to reconfigure them each time.",
       "acceptanceCriteria": [
-        "Add Node model: id, name, userId (relation to User), lastSeen DateTime, status enum (online/offline)",
-        "Add Agent model: id, slug (unique per user), name, description, type enum (hermes/openclaw/custom), nodeId (relation to Node), userId (relation to User), status enum (online/offline), adapterConfig Json (optional), shared Boolean (default false)",
-        "Validate slug format: [a-zA-Z0-9-]+ only (no '/' or spaces) — add @db constraint or application-level validation",
-        "Add unique constraint on (userId, slug) — slugs are unique per user, not globally",
-        "Add proper indexes on Node.userId, Agent.nodeId, Agent.slug, Agent.userId",
-        "Generate and run migration successfully",
+        "Agent display names survive CLI restart and reconnection",
+        "Agent timeout settings survive CLI restart and reconnection",
+        "Settings are stored in a persistent location (DB or config file)",
+        "On CLI connect, previously saved display names and timeout settings are restored",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Foundation for all agent features. Check solved problems for Prisma schema guidelines."
+      "notes": "Investigate where display names and timeout settings are currently stored (likely only in-memory on the WebSocket connection or server state). Move to database or persistent config."
     },
     {
-      "id": "US-002",
-      "title": "Add Conversation and Message models to Prisma schema",
-      "description": "As a developer, I need database models for conversations and messages so users can chat with agents.",
+      "id": "OPT-002",
+      "title": "Admin page with signup deactivation toggle",
+      "description": "As an admin, I want a dedicated admin page where I can deactivate new user signups so I can control who can access the platform.",
       "acceptanceCriteria": [
-        "Add Conversation model: id, title (optional), createdAt, updatedAt, userId (relation to User), agentId (relation to Agent)",
-        "Add Message model: id, conversationId (relation to Conversation), senderType enum (user/agent), senderId String, content String (text), createdAt",
-        "Add proper indexes on Conversation.userId, Conversation.agentId, Message.conversationId",
-        "Generate and run migration successfully",
-        "Typecheck passes"
+        "New admin page route accessible only to admin users",
+        "Toggle to enable/disable new user signups",
+        "When signups are disabled, the signup form shows a message explaining signups are closed",
+        "Setting persists in the database",
+        "Check Better-Auth for admin role and signup control patterns",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Depends on US-001 for Agent model."
+      "notes": "Use kctx to research Better-Auth admin capabilities and signup control. May need a system settings table in the database."
     },
     {
-      "id": "US-003",
-      "title": "Add AgentPermission and ApiKey models to Prisma schema",
-      "description": "As a developer, I need models for agent-to-agent permissions and API key authentication.",
+      "id": "OPT-003",
+      "title": "Invitation email system for admins",
+      "description": "As an admin, I want to send invitation emails to new users so I can control who joins the platform when signups are disabled.",
       "acceptanceCriteria": [
-        "Add AgentPermission model: id, agentId (relation to Agent), targetAgentId (relation to Agent), createdBy (relation to User), createdAt — permissions can cross user boundaries",
-        "Add unique constraint on (agentId, targetAgentId)",
-        "Add ApiKey model: id, keyHash String, name String, userId (relation to User), createdAt, lastUsedAt (optional)",
-        "Ensure User model has a unique username field matching [a-zA-Z0-9-]+ (no '/' or spaces) — add if not present, enforce at signup",
-        "Generate and run migration successfully",
-        "Typecheck passes"
+        "Admin page has an 'Invite User' form with email input",
+        "Sends invitation email via SMTP using React Email for templating",
+        "Invitation contains a unique signup link with a token",
+        "Invited users can sign up even when general signups are disabled",
+        "Invitation tokens expire after a configurable period (default 7 days)",
+        "Admin can see list of pending invitations and revoke them",
+        "Check Better-Auth for invitation flow patterns",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Depends on US-001 for Agent model. Username field is needed for cross-user agent addressing (username/agentslug format)."
+      "notes": "Use kctx to research Better-Auth invitation patterns and React Email + SMTP setup. Depends on OPT-002 for admin page."
     },
     {
-      "id": "US-004",
-      "title": "Add API key oRPC routes",
-      "description": "As a user, I need API endpoints to create, list, and revoke API keys so I can authenticate CLI connections.",
+      "id": "OPT-004",
+      "title": "Hide 'Resumed session' lines from chat web UI",
+      "description": "As a user, I want the chat UI to filter out CLI-internal metadata lines like 'Resumed session...' so I only see actual conversation content.",
       "acceptanceCriteria": [
-        "Add apiKey.create route: generates a random key, stores bcrypt hash, returns plaintext key once",
-        "Add apiKey.list route: returns all keys for the authenticated user (without hashes)",
-        "Add apiKey.revoke route: deletes an API key by id (must belong to authenticated user)",
-        "All routes require authentication",
-        "Typecheck passes"
+        "Messages starting with '↻ Resumed session' are filtered out or hidden in the web chat UI",
+        "Other similar CLI metadata lines (e.g., session restoration notices) are also filtered",
+        "The filtering happens on the display side only — raw messages are preserved in the database",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Check kctx for oRPC patterns. Check solved problems for API route conventions."
+      "notes": "This is a display-layer filter. Look at where messages are rendered in the conversation view and add a filter/transform step."
     },
     {
-      "id": "US-005",
-      "title": "API key management UI page",
-      "description": "As a user, I want a settings page to create, view, and revoke API keys for CLI authentication.",
+      "id": "OPT-005",
+      "title": "Markdown rendering setting for agent chat messages",
+      "description": "As a user, I want agent chat messages to be rendered as markdown by default, with an option to toggle this per agent.",
       "acceptanceCriteria": [
-        "New route at /_auth/settings/api-keys",
-        "Form to create a new API key with a name field",
-        "On creation, display the key once in a copyable field with a warning that it won't be shown again",
-        "List of existing API keys showing name, creation date, last used date",
-        "Revoke button with confirmation dialog on each key",
+        "Add a 'Render as Markdown' setting per agent (default: true)",
+        "When enabled, agent messages are rendered as formatted markdown (headings, bold, code blocks, lists, etc.)",
+        "When disabled, agent messages are shown as plain text",
+        "Use a well-maintained React markdown renderer library",
+        "Setting persists in the database on the Agent model",
         "Typecheck passes",
         "Verify in browser using dev-browser skill"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Uses the API key oRPC routes from US-004. Follow existing settings page patterns."
+      "notes": "Research good React markdown renderers (react-markdown, marked, etc.). Add renderMarkdown boolean field to Agent model."
     },
     {
-      "id": "US-006",
-      "title": "WebSocket upgrade handler on Hono server",
-      "description": "As a developer, I need a WebSocket endpoint on the server so CLIs and web clients can establish persistent connections.",
+      "id": "OPT-006",
+      "title": "Delete conversations from desktop app",
+      "description": "As a user, I want to be able to delete conversations from the desktop/web app so I can clean up old or unwanted chats.",
       "acceptanceCriteria": [
-        "Add WebSocket upgrade handler at /ws route on the Hono server",
-        "Support two connection types: client (web app, authenticated via session) and node (CLI, authenticated via API key)",
-        "Maintain a connection registry mapping nodeId → WebSocket and userId → WebSocket[]",
-        "Handle connection open, close, and error events with proper cleanup",
-        "Typecheck passes"
+        "Delete button/action is accessible on conversation list items and within conversation view",
+        "Uses AlertDialog with type-to-confirm for destructive action (per overlay conventions)",
+        "Deletion removes the conversation and all its messages",
+        "Works on both desktop and PWA",
+        "After deletion, user is redirected to the agent's conversation list",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "Check kctx for Hono WebSocket adapter patterns. This is the core communication hub."
+      "notes": "Check if conversation.delete oRPC route already exists. If so, this is purely a UI task. Follow overlay conventions from AGENTS.md (AlertDialog with type-to-confirm for delete)."
     },
     {
-      "id": "US-007",
-      "title": "WebSocket message frame protocol and heartbeat",
-      "description": "As a developer, I need a structured message protocol and heartbeat system for reliable WebSocket communication.",
+      "id": "OPT-007",
+      "title": "Queue messages during CLI disconnection and retry on reconnect",
+      "description": "As a user, I want messages sent while the CLI is briefly disconnected to be queued and delivered when the connection is restored, rather than silently failing.",
       "acceptanceCriteria": [
-        "Define Frame type: { type: 'req'|'res'|'event', id: string, method: string, payload: unknown, error?: string }",
-        "Add message parsing and validation for incoming frames",
-        "Implement heartbeat: server pings every 30s, marks nodes offline after 90s silence",
-        "Add frame types: auth, message.send, message.response, message.chunk, message.done, agent.register, agent.heartbeat, agent.status",
-        "Put shared types in packages/shared/ (create if needed) so CLI and server can share them",
+        "When a message is sent to an agent whose CLI node is disconnected, the message is stored in an in-memory queue on the server",
+        "When the CLI reconnects, queued messages are delivered in order",
+        "Messages in the queue have a TTL (e.g., 5 minutes) — expired messages are discarded with an error sent to the user",
+        "User sees a 'pending delivery' indicator for queued messages",
+        "If the queue TTL expires, user is notified that the message could not be delivered",
         "Typecheck passes"
       ],
       "priority": 7,
       "passes": true,
-      "notes": "Depends on US-006. The shared package is new - set up as a TS package in the monorepo."
+      "notes": "Server-side in-memory queue. Consider edge cases: what if the CLI reconnects as a different node? What if multiple messages queue up?"
     },
     {
-      "id": "US-008",
-      "title": "Agent oRPC routes",
-      "description": "As a developer, I need API endpoints for managing agents so the web app can display and modify agent data.",
+      "id": "OPT-008",
+      "title": "Fix navbar hiding on input focus — desktop only bug",
+      "description": "As a desktop user, I don't want the navbar to hide when I focus a text input. This behavior should only activate on mobile devices.",
       "acceptanceCriteria": [
-        "Add agent.list route: returns user's own agents + agents shared with them by other users (in a separate 'shared' section), with optional search and filters (type, status, nodeId)",
-        "Add agent.get route: accepts bare slug (own agent) or username/slug (cross-user shared agent) — reject if not owned and not shared",
-        "Add agent.update route: update display name, description",
-        "Add agent.remove route: unregister an agent (must belong to authenticated user)",
-        "All routes require authentication and scope to user's agents only",
-        "Typecheck passes"
+        "On mobile viewports, the navbar continues to hide when a text input is focused (existing behavior preserved)",
+        "On desktop viewports (md breakpoint and above), the navbar remains visible when text inputs are focused",
+        "The breakpoint matches the existing responsive design system (md: 768px)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 8,
       "passes": true,
-      "notes": "Check solved problems for oRPC conventions."
+      "notes": "Look for the navbar hide-on-focus logic — likely uses a resize/focus listener or CSS. Add a viewport width check so it only triggers on mobile."
     },
     {
-      "id": "US-009",
-      "title": "Conversation and message oRPC routes",
-      "description": "As a developer, I need API endpoints for conversations and messages so the web app can manage chat threads.",
+      "id": "OPT-009",
+      "title": "Reset password flow when email is configured",
+      "description": "As a user, I want to be able to reset my password via email when the system has email (SMTP) configured.",
       "acceptanceCriteria": [
-        "Add conversation.list route: list conversations for an agent (sorted by recency, include last message preview)",
-        "Add conversation.get route: get conversation with messages",
-        "Add conversation.create route: start a new conversation with an agent",
-        "Add conversation.delete route: delete a conversation",
-        "Add message.list route: paginated messages for a conversation (cursor-based)",
-        "All routes require authentication and scope to user's conversations",
-        "Typecheck passes"
+        "When email environment variables are set, a 'Forgot password?' link appears on the login page",
+        "Clicking it shows a form to enter email address",
+        "Submitting sends a password reset email with a secure, time-limited token",
+        "The reset link leads to a page where the user can set a new password",
+        "Token expires after 1 hour",
+        "When email is NOT configured, the 'Forgot password?' link is hidden",
+        "Check Better-Auth for built-in password reset support",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
       "passes": true,
-      "notes": "Depends on US-002 for Conversation/Message models."
-    },
-    {
-      "id": "US-010",
-      "title": "Message routing through WebSocket",
-      "description": "As a developer, I need the server to route messages between web clients and agent CLIs via WebSocket.",
-      "acceptanceCriteria": [
-        "When server receives message.send from a web client: create Message record, look up target agent's node connection, forward to CLI",
-        "When server receives message.response from CLI: forward to user's WebSocket connection(s)",
-        "When server receives message.chunk from CLI: forward chunks to user's WebSocket for streaming",
-        "When server receives message.done from CLI: save complete message to DB, notify user",
-        "Handle case where target node is offline: return error to sender",
-        "Typecheck passes"
-      ],
-      "priority": 10,
-      "passes": true,
-      "notes": "Depends on US-006, US-007. Core message routing logic."
-    },
-    {
-      "id": "US-011",
-      "title": "CLI package setup with connect command",
-      "description": "As a user, I want a CLI tool that connects my machine to the MyAgents server via WebSocket.",
-      "acceptanceCriteria": [
-        "Create new apps/cli/ package with TypeScript, commander or citty for CLI framework",
-        "Add to pnpm workspace and turbo config",
-        "Implement 'myagents connect' command that reads API key from ~/.myagents/config.json or MYAGENTS_API_KEY env var",
-        "Opens WebSocket to server, authenticates with API key",
-        "Maintains persistent connection with reconnect on drop (exponential backoff)",
-        "Sends heartbeats to server",
-        "Typecheck passes"
-      ],
-      "priority": 11,
-      "passes": true,
-      "notes": "New package. Use ws for WebSocket client. Share types from packages/shared/."
-    },
-    {
-      "id": "US-012",
-      "title": "Agent auto-detection in CLI",
-      "description": "As a user, I want the CLI to automatically detect installed agents on my machine when connecting.",
-      "acceptanceCriteria": [
-        "On 'myagents connect', scan for Hermes: check 'which hermes' and ~/.hermes/config.yaml",
-        "Scan for OpenClaw: check 'which openclaw' and ~/.openclaw/config.json",
-        "Scan for custom agents: read from ~/.myagents/agents.yaml if it exists",
-        "Register each detected agent with the server via agent.register WebSocket message",
-        "Log which agents were detected and registered",
-        "Typecheck passes"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "Depends on US-011 for CLI package."
-    },
-    {
-      "id": "US-013",
-      "title": "Hermes agent adapter",
-      "description": "As a developer, I need an adapter that bridges the CLI to the Hermes agent runtime.",
-      "acceptanceCriteria": [
-        "Implement AgentAdapter interface: sendMessage(message, history) returns AsyncGenerator<string>, getStatus() returns Promise<AgentStatus>",
-        "Hermes adapter invokes subprocess: hermes chat -q '<message>' --quiet",
-        "Parse stdout for the response",
-        "Support --toolsets passthrough from adapter config",
-        "Handle process errors, timeouts, and non-zero exit codes",
-        "Typecheck passes"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "Depends on US-011. The adapter interface should be defined in a shared location within apps/cli/."
-    },
-    {
-      "id": "US-014",
-      "title": "OpenClaw agent adapter",
-      "description": "As a developer, I need an adapter that bridges the CLI to the OpenClaw agent runtime.",
-      "acceptanceCriteria": [
-        "Implement AgentAdapter interface for OpenClaw",
-        "Primary: connect to OpenClaw HTTP gateway (POST /v1/chat/completions) with SSE streaming",
-        "Fallback: subprocess (openclaw agent --message '<msg>' --json) if gateway is not running",
-        "Stream tokens back as AsyncGenerator<string> chunks",
-        "Handle connection errors and timeouts",
-        "Typecheck passes"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": "Depends on US-011."
-    },
-    {
-      "id": "US-015",
-      "title": "Agent list page UI",
-      "description": "As a user, I want to see all my connected agents in a grid/list view so I can manage them.",
-      "acceptanceCriteria": [
-        "New route at /_auth/agents",
-        "Grid/list view showing agent cards with: name, slug, type badge (hermes/openclaw/custom), node name, online/offline status indicator",
-        "Search bar with fuzzy matching on name, slug, description",
-        "Filter by type and status",
-        "Empty state when no agents are connected",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 15,
-      "passes": true,
-      "notes": "Uses agent.list oRPC route from US-008. Follow existing list page patterns. Check solved problems for dashboard conventions."
-    },
-    {
-      "id": "US-016",
-      "title": "Agent detail page UI",
-      "description": "As a user, I want to see detailed information about an agent and access its conversations.",
-      "acceptanceCriteria": [
-        "New route at /_auth/agents/:slug",
-        "Header with agent name, type badge, status indicator, node info, description",
-        "Conversations tab: list of conversations sorted by recency with last message preview",
-        "Settings tab: agent-specific config (display name, description) with edit form",
-        "New Conversation button",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 16,
-      "passes": true,
-      "notes": "Uses agent.get and conversation.list oRPC routes."
-    },
-    {
-      "id": "US-017",
-      "title": "Conversation view - chat UI",
-      "description": "As a user, I want a chat interface to send messages to agents and see their responses.",
-      "acceptanceCriteria": [
-        "New route at /_auth/agents/:slug/conversations/:id",
-        "Chat interface with message bubbles: user messages right-aligned, agent messages left-aligned",
-        "Message input area with send button",
-        "Conversation title display (auto-generated or user-set)",
-        "Load message history on mount with pagination (load more on scroll up)",
-        "Send message via WebSocket (message.send frame)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 17,
-      "passes": true,
-      "notes": "Core chat experience. Follow mobile-first PWA patterns from AGENTS.md."
-    },
-    {
-      "id": "US-018",
-      "title": "Real-time streaming in conversation view",
-      "description": "As a user, I want to see agent responses appear token-by-token in real-time like ChatGPT.",
-      "acceptanceCriteria": [
-        "Listen for message.chunk WebSocket frames and append tokens to the current message bubble",
-        "Show typing indicator while waiting for first chunk",
-        "On message.done, finalize the message display",
-        "Handle streaming errors gracefully (show error state in the message bubble)",
-        "Smooth scrolling to keep latest content visible during streaming",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 18,
-      "passes": true,
-      "notes": "Depends on US-017 for conversation view and US-010 for message routing."
-    },
-    {
-      "id": "US-019",
-      "title": "Conversation list sidebar",
-      "description": "As a user, I want a sidebar showing all conversations with the current agent so I can switch between them.",
-      "acceptanceCriteria": [
-        "Sidebar on desktop showing conversation list for the current agent",
-        "Each item shows title and last message preview with timestamp",
-        "Active conversation highlighted",
-        "Collapsible on mobile (slide-in drawer pattern)",
-        "New Conversation button at top of sidebar",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 19,
-      "passes": true,
-      "notes": "Depends on US-017. Responsive: sidebar on desktop, drawer on mobile."
-    },
-    {
-      "id": "US-020",
-      "title": "Push notifications for agent responses",
-      "description": "As a user, I want push notifications when an agent responds while I'm not viewing that conversation.",
-      "acceptanceCriteria": [
-        "When agent responds and user is not viewing that conversation, send push notification",
-        "Notification includes agent name and response preview text",
-        "Tapping notification opens the conversation in the PWA",
-        "Respect existing push notification infrastructure and subscription management",
-        "Typecheck passes"
-      ],
-      "priority": 20,
-      "passes": true,
-      "notes": "Leverage existing push notification setup. Check how push is currently implemented."
-    },
-    {
-      "id": "US-021",
-      "title": "Mobile navigation for agents",
-      "description": "As a mobile user, I want agents integrated into the bottom navigation for easy access.",
-      "acceptanceCriteria": [
-        "Add Agents tab to bottom nav (mobile)",
-        "Add Conversations tab to bottom nav showing recent conversations across all agents",
-        "Responsive layout: single column on mobile, sidebar + content on desktop",
-        "Safe area handling for notched devices (use existing CSS variables)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 21,
-      "passes": true,
-      "notes": "Follow existing BottomNav patterns from AGENTS.md."
-    },
-    {
-      "id": "US-022",
-      "title": "CLI template system for custom agents",
-      "description": "As a user, I want to define custom agents in a YAML config file so any CLI tool can be connected.",
-      "acceptanceCriteria": [
-        "Read custom agent definitions from ~/.myagents/agents.yaml",
-        "Support config fields: slug, name, description, type (custom), adapter.command, adapter.shell, adapter.streaming, adapter.timeout",
-        "Support {{message}}, {{historyFile}}, {{conversationId}}, {{agentSlug}} template variables in command",
-        "Register custom agents alongside auto-detected ones on connect",
-        "Typecheck passes"
-      ],
-      "priority": 22,
-      "passes": true,
-      "notes": "Depends on US-011. Simple {{var}} interpolation, no Handlebars dependency."
-    },
-    {
-      "id": "US-023",
-      "title": "Custom agent adapter implementation",
-      "description": "As a developer, I need an adapter that executes custom CLI commands to interact with user-defined agents.",
-      "acceptanceCriteria": [
-        "Implement AgentAdapter interface for custom agents",
-        "Interpolate template variables into command string",
-        "If streaming: true, read stdout line-by-line and yield chunks",
-        "If streaming: false, wait for process exit and return stdout as response",
-        "Shell-escape {{message}} to prevent injection; also pass via MYAGENTS_MESSAGE env var",
-        "Handle timeout, non-zero exit codes, and stderr as errors",
-        "Typecheck passes"
-      ],
-      "priority": 23,
-      "passes": true,
-      "notes": "Security-critical: shell escaping is essential. Depends on US-022."
-    },
-    {
-      "id": "US-024",
-      "title": "CLI agent subcommands",
-      "description": "As a user, I want CLI commands to list agents, send messages, and manage custom agent configs.",
-      "acceptanceCriteria": [
-        "Add 'myagents agent list' command: calls server API, displays agents in table format",
-        "Add 'myagents agent send <slug> <message>' command: sends a message and prints response",
-        "Add 'myagents agent add' command: interactive wizard to add a custom agent to agents.yaml",
-        "Add 'myagents agent remove <slug>' command: remove from agents.yaml and unregister",
-        "Typecheck passes"
-      ],
-      "priority": 24,
-      "passes": true,
-      "notes": "Depends on US-011. agent list respects permissions (server-side filtering)."
-    },
-    {
-      "id": "US-025",
-      "title": "Agent management in web UI",
-      "description": "As a user, I want to edit agent metadata and see node information from the web app.",
-      "acceptanceCriteria": [
-        "On agent detail page settings tab: edit display name and description",
-        "Show which node each agent runs on with node status",
-        "Agents that go offline show as 'offline' but retain conversation history",
-        "Remove agent button with confirmation (AlertDialog with type-to-confirm)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 25,
-      "passes": true,
-      "notes": "Extends US-016 agent detail page. Follow overlay conventions from AGENTS.md."
-    },
-    {
-      "id": "US-026",
-      "title": "Permission model server-side enforcement",
-      "description": "As a developer, I need server-side permission checks so agents can only communicate with explicitly allowed targets, including across user boundaries.",
-      "acceptanceCriteria": [
-        "Add oRPC routes: permission.grant(agentId, targetAgentId), permission.revoke(agentId, targetAgentId), permission.list(agentId)",
-        "Permissions are directional: A→B does not imply B→A",
-        "Default deny: no agent can talk to any other agent without explicit permission",
-        "Same-user permissions: user can freely grant permissions between their own agents",
-        "Cross-user permissions: user can grant their agent permission to message another user's agent ONLY if that agent has shared=true",
-        "Add agent.share and agent.unshare routes to toggle an agent's shared flag",
-        "All permission routes require authentication",
-        "Typecheck passes"
-      ],
-      "priority": 26,
-      "passes": true,
-      "notes": "Uses AgentPermission model from US-003. Cross-user sharing requires both sides to opt in: owner shares the agent, other user grants their agent permission."
-    },
-    {
-      "id": "US-027",
-      "title": "Permission-gated agent discovery",
-      "description": "As a developer, I need the agent list endpoint to filter results based on the requesting agent's permissions, including cross-user shared agents.",
-      "acceptanceCriteria": [
-        "When an agent (via CLI) requests agent list, identify the requesting agent via node WebSocket auth + agent slug",
-        "Query AgentPermission for all targetAgentId where agentId = requester — includes cross-user agents",
-        "Return only permitted agents — agents cannot see agents they are not allowed to talk to",
-        "User requests (from web app) see all their own agents + a 'Shared with me' section showing other users' shared agents they have permissions for",
-        "Unshared agents belonging to other users are never visible",
-        "Returned agents include owner username for cross-user agents (displayed as username/slug)",
-        "Typecheck passes"
-      ],
-      "priority": 27,
-      "passes": true,
-      "notes": "Depends on US-026. No information leaks — agents only see permitted targets. Cross-user agents display as username/slug."
-    },
-    {
-      "id": "US-028",
-      "title": "Agent-to-agent message routing",
-      "description": "As a developer, I need the server to route messages between agents with permission checks, including cross-user routing.",
-      "acceptanceCriteria": [
-        "Support message.send with senderAgent and targetAgent fields",
-        "targetAgent accepts bare slug (same-user agent) or username/slug (cross-user agent)",
-        "Server resolves username/slug to the correct agent across user boundaries",
-        "Server checks AgentPermission before routing — reject if not allowed",
-        "Cross-user routing: message goes to target agent's node even though it belongs to a different user",
-        "Create/continue conversation between two agents automatically",
-        "Route message to target agent's node, get response, route back to sender",
-        "Store all agent-to-agent messages in the database",
-        "Typecheck passes"
-      ],
-      "priority": 28,
-      "passes": true,
-      "notes": "Depends on US-010 and US-026. Cross-user routing uses username/slug addressing."
-    },
-    {
-      "id": "US-029",
-      "title": "Permission management UI",
-      "description": "As a user, I want to manage which agents can talk to each other, including sharing agents with other users.",
-      "acceptanceCriteria": [
-        "Add Permissions tab to agent detail page",
-        "'Share this agent' toggle at top — when enabled, other users can discover this agent",
-        "Two sections: 'Can send messages to' and 'Can receive messages from'",
-        "Each section lists agents with toggle switches — includes cross-user shared agents displayed as username/slug",
-        "Search/filter to find agents (own + shared by other users)",
-        "Bulk actions: 'Allow all my agents' / 'Deny all'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 29,
-      "passes": true,
-      "notes": "Extends US-016 agent detail page with new tab. Cross-user agents shown as username/slug."
-    },
-    {
-      "id": "US-030",
-      "title": "Agent identity in CLI",
-      "description": "As a developer, I need the CLI to identify which agent is making a request for agent-to-agent communication.",
-      "acceptanceCriteria": [
-        "Support MYAGENTS_AGENT_SLUG environment variable for identifying the calling agent",
-        "Support --as <slug> flag on CLI commands as alternative",
-        "When sending to cross-user agents, use username/slug format in CLI: 'myagents agent send username/slug \"message\"'",
-        "When sending agent-to-agent messages, include sender agent identity in the WebSocket frame",
-        "CLI sets MYAGENTS_AGENT_SLUG env var when spawning agent adapter processes",
-        "Typecheck passes"
-      ],
-      "priority": 30,
-      "passes": true,
-      "notes": "Depends on US-024 for CLI agent commands."
-    },
-    {
-      "id": "US-031",
-      "title": "In-browser Whisper integration using whisper-web",
-      "description": "As a developer, I need client-side speech-to-text using the whisper-web approach (transformers.js + Whisper WASM/WebGPU).",
-      "acceptanceCriteria": [
-        "Integrate @huggingface/transformers for in-browser Whisper inference, following whisper-web's experimental-webgpu branch architecture",
-        "Use WebGPU backend for GPU-accelerated inference when available, fall back to WASM",
-        "Use a Web Worker for transcription to keep the UI thread responsive (reference whisper-web's worker pattern)",
-        "No audio leaves the device — all processing is local",
-        "Default to whisper-base.en model; support whisper-large-v3-turbo on WebGPU-capable devices",
-        "Create a useWhisper hook that handles model loading, audio processing, and transcription",
-        "Handle devices without WebGPU gracefully (fall back to WASM), show 'not supported' if neither available",
-        "Typecheck passes"
-      ],
-      "priority": 31,
-      "passes": true,
-      "notes": "Privacy-first: all audio processing is client-side. Reference implementation is at ../whisper-web/ (sibling repo, on experimental-webgpu branch with GPU acceleration). Use kctx to query whisper-web for architecture patterns (worker setup, model loading, audio processing pipeline). Also read ../whisper-web/src/ directly for implementation details. Prefer WebGPU backend for faster inference (falls back to WASM if unavailable). Adapt to our React app structure — don't copy wholesale."
-    },
-    {
-      "id": "US-032",
-      "title": "Voice recording UI",
-      "description": "As a user, I want a microphone button in the chat to dictate messages using speech-to-text.",
-      "acceptanceCriteria": [
-        "Microphone button next to send button in message input area",
-        "Support both press-and-hold and toggle recording modes",
-        "Visual feedback: waveform or pulsing animation while recording",
-        "On stop: process audio with Whisper via Web Worker, show transcribed text in input field",
-        "User can edit transcription before sending",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 32,
-      "passes": true,
-      "notes": "Depends on US-031 for Whisper integration and US-017 for conversation view. Use kctx to query whisper-web for audio recording and MediaRecorder usage. Also read ../whisper-web/src/ for the recording implementation."
-    },
-    {
-      "id": "US-033",
-      "title": "Whisper model management",
-      "description": "As a user, I want to manage Whisper model downloads and choose model size for accuracy vs speed.",
-      "acceptanceCriteria": [
-        "First use: download Whisper model (~40-75MB) with progress indicator showing download percentage",
-        "Cache model in browser (Cache API, following whisper-web's caching approach) so it downloads only once",
-        "Settings page option to choose model size: tiny, base, small",
-        "Settings page option to choose language",
-        "Show 'not supported' message on devices without WebGPU/WASM",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 33,
-      "passes": true,
-      "notes": "Depends on US-031. Use kctx to query whisper-web for model loading progress callbacks and caching strategy. Also read ../whisper-web/src/ for how it handles model downloads and caching."
-    },
-    {
-      "id": "US-034",
-      "title": "Web Speech API fallback",
-      "description": "As a user on a device with poor WASM performance, I want a fallback speech-to-text option.",
-      "acceptanceCriteria": [
-        "Offer browser's built-in SpeechRecognition API as fallback",
-        "Auto-detect: if Whisper WASM is too slow, suggest fallback",
-        "Setting to manually choose between Whisper and Web Speech API",
-        "Same recording UI works with both backends",
-        "Typecheck passes"
-      ],
-      "priority": 34,
-      "passes": true,
-      "notes": "Depends on US-032 for recording UI."
-    },
-    {
-      "id": "US-035",
-      "title": "Conversation full-text search",
-      "description": "As a user, I want to search across all my conversations to find specific messages.",
-      "acceptanceCriteria": [
-        "Search input accessible from conversations list or global nav",
-        "Full-text search across message content in all user's conversations",
-        "Filter by agent and date range",
-        "Results show message previews with highlighted search term matches",
-        "Clicking a result navigates to that message in its conversation",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 35,
-      "passes": true,
-      "notes": "Add oRPC route for search. Consider Prisma full-text search or LIKE queries."
-    },
-    {
-      "id": "US-036",
-      "title": "Agent health monitoring dashboard",
-      "description": "As a user, I want a dashboard widget showing agent statuses and uptime at a glance.",
-      "acceptanceCriteria": [
-        "Dashboard widget or section on agents page showing all agent statuses",
-        "Uptime tracking per agent (percentage of time online, stored in DB)",
-        "Push notification when an agent goes offline unexpectedly",
-        "Show last seen timestamp for offline agents",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 36,
-      "passes": true,
-      "notes": "Requires tracking agent online/offline transitions server-side."
-    },
-    {
-      "id": "US-037",
-      "title": "Conversation export",
-      "description": "As a user, I want to export conversations as Markdown or JSON for archival or sharing.",
-      "acceptanceCriteria": [
-        "Export button on conversation view with format choice: Markdown or JSON",
-        "Markdown format: readable chat transcript with timestamps and sender labels",
-        "JSON format: structured array of message objects",
-        "Bulk export: export all conversations with an agent from the agent detail page",
-        "Download as file with descriptive filename (agent-slug_conversation-title_date)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 37,
-      "passes": true,
-      "notes": "Client-side export for single conversations, server-side for bulk."
-    },
-    {
-      "id": "US-038",
-      "title": "Multi-user isolation and cross-user agent sharing",
-      "description": "As an admin, I want multiple users to have isolated agents by default, with opt-in cross-user sharing.",
-      "acceptanceCriteria": [
-        "Each user has their own agents, conversations, and permissions (scoped by userId)",
-        "Default isolation: User A's agents are invisible to User B unless explicitly shared (agent.shared=true)",
-        "Cross-user sharing flow: User A shares agent → User B discovers it in 'Shared with me' → User B grants their agent permission to message it",
-        "Verify all queries are properly scoped: unshared agents never leak to other users",
-        "Cross-user conversations stored with correct ownership (each user sees conversations from their side)",
-        "Admin role can see all agents across users and override permissions",
-        "Typecheck passes"
-      ],
-      "priority": 38,
-      "passes": true,
-      "notes": "Audit all agent/conversation queries for proper scoping. Cross-user agents addressed as username/slug. Check Better-Auth admin patterns."
-    },
-    {
-      "id": "US-039",
-      "title": "CLI quality-of-life commands",
-      "description": "As a CLI user, I want status, logs, config, and update commands for easier management.",
-      "acceptanceCriteria": [
-        "Add 'myagents status' command: show connection status, list agents with online/offline",
-        "Add 'myagents logs' command: tail logs from the CLI connector",
-        "Add 'myagents config set <key> <value>' and 'myagents config get <key>' commands",
-        "Store logs in ~/.myagents/logs/ with rotation",
-        "Typecheck passes"
-      ],
-      "priority": 39,
-      "passes": true,
-      "notes": "Depends on US-011 for CLI package."
-    },
-    {
-      "id": "US-040",
-      "title": "Rate limiting and abuse prevention",
-      "description": "As an admin, I want rate limits on agent messaging to prevent runaway loops and abuse.",
-      "acceptanceCriteria": [
-        "Rate limit messages per agent per minute (configurable, default 60/min)",
-        "Detect agent-to-agent loops: if two agents message each other more than N times per minute, pause and notify user",
-        "Server-side circuit breaker with configurable threshold",
-        "Rate limit config stored per-agent in DB, editable from agent settings UI",
-        "Return rate limit info in error responses (retry-after header equivalent in WebSocket)",
-        "Typecheck passes"
-      ],
-      "priority": 40,
-      "passes": true,
-      "notes": "Critical for safety when agents can message each other autonomously."
+      "notes": "Use kctx to research Better-Auth password reset flow. This likely requires email sending infrastructure from OPT-003 (React Email + SMTP). Can be implemented independently if email utils are set up first."
     }
   ]
 }
