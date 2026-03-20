@@ -10,6 +10,8 @@ import { useEffect, useRef, useState } from "react";
  * - iOS fires "scroll" events (not just "resize") on visualViewport when the
  *   keyboard opens, so we listen to both.
  */
+const MD_BREAKPOINT = 768;
+
 export function useMobileKeyboard() {
   const [inputFocused, setInputFocused] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -27,7 +29,11 @@ export function useMobileKeyboard() {
     };
 
     const onFocusIn = (e: FocusEvent) => {
-      if (e.target instanceof HTMLElement && isEditable(e.target)) {
+      if (
+        window.innerWidth < MD_BREAKPOINT &&
+        e.target instanceof HTMLElement &&
+        isEditable(e.target)
+      ) {
         setInputFocused(true);
       }
     };
