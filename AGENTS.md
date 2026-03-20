@@ -69,7 +69,7 @@ For detailed overlay examples, loading states, resize animation, toast notificat
 
 #### Approved escape hatches
 
-1. **`useMountEffect()`** — for one-time external sync on mount (defined in `apps/web/src/hooks/useMountEffect.ts`). This is `useEffect(fn, [])` wrapped in a named hook.
+1. **`useMountEffect()`** — for one-time external sync on mount (defined in `apps/web/src/hooks/use-mount-effect.ts`). This is `useEffect(fn, [])` wrapped in a named hook.
 2. **Custom hooks** — `useEffect` inside a purpose-built hook (`useMediaQuery`, `useDocumentTitle`, `useScrollRestore`, etc.) is acceptable when it truly syncs with an external system.
 3. **Existing code** — legacy `useEffect` calls are tracked for removal. New code must not add more.
 

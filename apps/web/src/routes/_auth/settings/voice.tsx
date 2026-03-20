@@ -9,9 +9,10 @@ import {
 import { Label } from "@myagents/ui/components/label";
 import { createFileRoute } from "@tanstack/react-router";
 import { AlertCircle, Check, Download, Globe, Loader2, Mic, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
+import { useCachedModelInfo, clearModelCache } from "@/hooks/use-cached-model-info";
 import { isWebSpeechSupported } from "@/hooks/use-web-speech";
 import {
   type SpeechEngine,
@@ -27,57 +28,6 @@ export const Route = createFileRoute("/_auth/settings/voice")({
   component: VoiceSettings,
 });
 
-/** Check the Cache API for cached model files */
-async function getCachedModelInfo(): Promise<{
-  totalSize: number;
-  modelNames: string[];
-}> {
-  try {
-    const cacheNames = await caches.keys();
-    let totalSize = 0;
-    const modelNames = new Set<string>();
-
-    for (const cacheName of cacheNames) {
-      if (
-        cacheName.includes("transformers") ||
-        cacheName.includes("huggingface")
-      ) {
-        const cache = await caches.open(cacheName);
-        const keys = await cache.keys();
-        for (const request of keys) {
-          const url = request.url;
-          for (const m of WHISPER_MODELS) {
-            if (url.includes(m.id.replace("onnx-community/", ""))) {
-              modelNames.add(m.id);
-            }
-          }
-          const response = await cache.match(request);
-          if (response) {
-            const blob = await response.clone().blob();
-            totalSize += blob.size;
-          }
-        }
-      }
-    }
-
-    return { totalSize, modelNames: Array.from(modelNames) };
-  } catch {
-    return { totalSize: 0, modelNames: [] };
-  }
-}
-
-/** Clear cached model files */
-async function clearModelCache(): Promise<void> {
-  const cacheNames = await caches.keys();
-  for (const cacheName of cacheNames) {
-    if (
-      cacheName.includes("transformers") ||
-      cacheName.includes("huggingface")
-    ) {
-      await caches.delete(cacheName);
-    }
-  }
-}
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
@@ -89,8 +39,10 @@ function formatBytes(bytes: number): string {
 
 function VoiceSettings() {
   const whisper = useWhisper();
-  const [cacheSize, setCacheSize] = useState<number>(0);
-  const [cachedModels, setCachedModels] = useState<string[]>([]);
+  const { cacheSize, cachedModels, refresh: refreshCacheInfo } = useCachedModelInfo(
+    whisper.isModelLoading,
+    whisper.progressItems.length,
+  );
   const [isClearing, setIsClearing] = useState(false);
   const [engine, setEngineState] = useState<SpeechEngine>(getStoredSpeechEngine);
 
@@ -105,22 +57,6 @@ function VoiceSettings() {
         : "Switched to Web Speech API (browser built-in)",
     );
   }, []);
-
-  const refreshCacheInfo = useCallback(async () => {
-    const info = await getCachedModelInfo();
-    setCacheSize(info.totalSize);
-    setCachedModels(info.modelNames);
-  }, []);
-
-  useEffect(() => {
-    refreshCacheInfo();
-  }, [refreshCacheInfo]);
-
-  useEffect(() => {
-    if (!whisper.isModelLoading && whisper.progressItems.length === 0) {
-      refreshCacheInfo();
-    }
-  }, [whisper.isModelLoading, whisper.progressItems.length, refreshCacheInfo]);
 
   const handleClearCache = async () => {
     setIsClearing(true);
