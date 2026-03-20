@@ -116,7 +116,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "Server-side in-memory queue. Consider edge cases: what if the CLI reconnects as a different node? What if multiple messages queue up?"
     },
     {

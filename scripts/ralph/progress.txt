@@ -13,6 +13,9 @@
 - `updateMutation` in agent settings has an explicit type annotation on `mutationFn` — update it when adding new fields to the update API
 - Delete confirmation uses Dialog (not AlertDialog — component doesn't exist) with type-to-confirm pattern; see `_auth/conversations.tsx` for reference
 - Use `orpc.<router>.key()` for broad cache invalidation across all queries in a namespace
+- New frame methods must be added to `FrameMethod` enum in `packages/shared/src/frames.ts`
+- In-memory server state (Maps) in `ws.ts` is the pattern for transient data with TTLs; DB is for persistent data
+- `handleAgentRegister` in ws.ts is the hook point for actions when an agent reconnects (fires after agent status → online)
 
 # Ralph Progress Log
 Started: Fri Mar 20 06:51:06 PM UTC 2026
@@ -120,5 +123,21 @@ Started: Fri Mar 20 06:51:06 PM UTC 2026
   - `DropdownMenuSeparator` is available from the dropdown-menu component for visual grouping
   - `orpc.conversations.key()` is used for broad invalidation of all conversation queries
   - Used solved problem `ui/shadcn/dashboard-conventions` for delete confirmation pattern
+  - Manual browser verification still needed
+---
+
+## 2026-03-20 - OPT-007
+- **What was implemented:** Added in-memory message queue for offline agents. When a user sends a message to an agent whose CLI is disconnected, the message is saved to DB and queued in memory with a 5-minute TTL. When the CLI reconnects (via `handleAgentRegister`), queued messages are delivered in order. If TTL expires, user is notified via `queue.expired` WebSocket event and an error message is saved to the conversation. The UI shows a "Pending delivery — agent offline" indicator on queued messages.
+- **Files changed:**
+  - `packages/shared/src/frames.ts` — Added `queue.expired` to FrameMethod enum
+  - `apps/server/src/ws.ts` — Added `OfflineQueuedMessage` interface, `offlineMessageQueue` Map, `expireOfflineMessage()` TTL handler, `processOfflineQueueForAgent()` reconnect handler. Modified `handleMessageSend()` to auto-queue when agent offline instead of returning error. Hooked into `handleAgentRegister()` to process queue on reconnect.
+  - `apps/web/src/hooks/use-conversation-socket.ts` — Added `pendingDelivery` to ChatMessage interface, handle `queued: true` in message.send response, handle `queue.expired` event, handle offline delivery in `queue.dequeued`
+  - `apps/web/src/routes/_auth/agents/$slug/conversations/$id.tsx` — Added `pendingDelivery` to ChatMessage interface, added "Pending delivery — agent offline" indicator in MessageBubble for user messages with pendingDelivery flag
+- **Learnings for future iterations:**
+  - `handleAgentRegister` is the single hook point for when an agent comes back online — use it for any reconnect-triggered logic
+  - In-memory Maps in ws.ts are appropriate for transient server state with TTLs (vs DB for persistent data)
+  - The `message.send` response payload can include additional flags like `queued: true` without breaking existing clients
+  - New WebSocket frame methods must be added to the `FrameMethod` z.enum in `packages/shared/src/frames.ts`
+  - The `sendFrame` call in the conversation page gets a response frame that is handled in `use-conversation-socket.ts` — good separation of concerns
   - Manual browser verification still needed
 ---
