@@ -100,7 +100,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Check if conversation.delete oRPC route already exists. If so, this is purely a UI task. Follow overlay conventions from AGENTS.md (AlertDialog with type-to-confirm for delete)."
     },
     {
