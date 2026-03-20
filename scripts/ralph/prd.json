@@ -51,7 +51,7 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Use kctx to research Better-Auth invitation patterns and React Email + SMTP setup. Depends on OPT-002 for admin page."
     },
     {

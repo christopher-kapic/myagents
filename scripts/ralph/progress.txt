@@ -46,3 +46,26 @@ Started: Fri Mar 20 06:51:06 PM UTC 2026
   - The settings layout (`_auth/settings.tsx`) conditionally shows the Admin tab based on `session.user.role`
   - Manual browser verification still needed
 ---
+
+## 2026-03-20 - OPT-003
+- **What was implemented:** Already fully implemented in the codebase. Verified all acceptance criteria pass:
+  - `InvitationsCard` component in admin page with email input form
+  - `sendInvitationEmail()` sends via SMTP using React Email templates
+  - Unique tokens generated with `randomBytes(32)`, stored as SHA-256 hash
+  - Login page validates invitation tokens and allows signup when disabled
+  - Tokens expire after 7 days (`INVITATION_EXPIRY_DAYS = 7`)
+  - Admin can list invitations with status (pending/accepted/expired/revoked) and revoke pending ones
+  - Web typecheck passes clean
+- **Files verified (no changes needed):**
+  - `packages/api/src/routers/invitations.ts` — Full CRUD: create, list, revoke, accept
+  - `packages/api/src/lib/email.ts` — SMTP email sending with `sendInvitationEmail()`
+  - `packages/db/prisma/schema/invitations.prisma` — Invitation model with tokenHash, expiresAt, acceptedAt, revokedAt
+  - `apps/web/src/routes/_auth/settings/admin.tsx` — InvitationsCard conditionally shown when SMTP configured
+  - `apps/web/src/routes/login.tsx` — Invitation token validation and conditional signup
+- **Learnings for future iterations:**
+  - Invitation tokens are hashed (SHA-256) before storage — raw token only exists in the email link
+  - `InvitationsCard` is only shown when `smtpConfigured` is true (from `appConfig`)
+  - The `accept` procedure is a `publicProcedure` (no auth required) since it's called from login page
+  - `isSmtpConfigured()` from `packages/api/src/lib/email.ts` checks env vars
+  - Manual browser verification still needed
+---
