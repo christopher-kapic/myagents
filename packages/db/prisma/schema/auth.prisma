@@ -22,6 +22,7 @@ model User {
   agentPermissions  AgentPermission[]
   apiKeys           ApiKey[]
   invitations       Invitation[]
+  agentShares       AgentShare[]   @relation("agentShares")
 
   @@unique([email])
   @@map("user")

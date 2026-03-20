@@ -47,6 +47,7 @@ model Agent {
   permissionsGranted   AgentPermission[] @relation("permissionsGranted")
   permissionsReceived  AgentPermission[] @relation("permissionsReceived")
   uptimeLogs           AgentUptimeLog[]
+  shares               AgentShare[]
 
   @@unique([userId, slug])
   @@index([nodeId])
