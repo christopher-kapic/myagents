@@ -222,16 +222,38 @@ export const conversationsRouter = {
       const userId = context.session.user.id;
       const admin = isAdmin(context);
 
-      // Verify the agent belongs to the user (admin can access any agent)
+      // Verify the agent belongs to the user or is shared with them
       const agent = await prisma.agent.findUnique({
         where: { id: input.agentId },
         select: { userId: true },
       });
 
-      if (!agent || (!admin && agent.userId !== userId)) {
+      if (!agent) {
         throw new ORPCError("NOT_FOUND", {
           message: "Agent not found",
         });
+      }
+
+      let sharedVia: string | null = null;
+
+      if (!admin && agent.userId !== userId) {
+        // Non-owner: check for an active share
+        const share = await prisma.agentShare.findFirst({
+          where: {
+            agentId: input.agentId,
+            userId,
+            active: true,
+          },
+          select: { id: true },
+        });
+
+        if (!share) {
+          throw new ORPCError("NOT_FOUND", {
+            message: "Agent not found",
+          });
+        }
+
+        sharedVia = share.id;
       }
 
       const conversation = await prisma.conversation.create({
@@ -239,6 +261,7 @@ export const conversationsRouter = {
           userId,
           agentId: input.agentId,
           title: input.title ?? null,
+          sharedVia,
         },
         select: conversationSelect,
       });
