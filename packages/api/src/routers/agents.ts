@@ -16,6 +16,7 @@ const agentSelect = {
   nodeId: true,
   userId: true,
   adapterConfig: true,
+  renderMarkdown: true,
   rateLimitPerMin: true,
   circuitBreakerThreshold: true,
   node: { select: { id: true, name: true, status: true } },
@@ -308,6 +309,7 @@ export const agentsRouter = {
         slug: z.string().min(1).max(100).regex(/^[a-zA-Z0-9-]+$/, "Slug must only contain letters, numbers, and hyphens").optional(),
         name: z.string().min(1).max(255).optional(),
         description: z.string().max(1000).nullish(),
+        renderMarkdown: z.boolean().optional(),
       }),
     )
     .handler(async ({ input, context }) => {
@@ -343,6 +345,7 @@ export const agentsRouter = {
       if (input.slug !== undefined) data.slug = input.slug;
       if (input.name !== undefined) data.name = input.name;
       if (input.description !== undefined) data.description = input.description;
+      if (input.renderMarkdown !== undefined) data.renderMarkdown = input.renderMarkdown;
 
       const updated = await prisma.agent.update({
         where: { id: input.id },

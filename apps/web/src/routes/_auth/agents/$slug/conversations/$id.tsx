@@ -50,6 +50,8 @@ import {
   makeExportFilename,
 } from "@/utils/export";
 import { orpc } from "@/utils/orpc";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export const Route = createFileRoute(
   "/_auth/agents/$slug/conversations/$id",
@@ -505,7 +507,11 @@ function ConversationPage() {
         {localMessages
           .filter((msg) => !isCliMetadata(msg.content))
           .map((msg) => (
-            <MessageBubble key={msg.id} message={msg} />
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              renderMarkdown={agentData?.renderMarkdown !== false}
+            />
           ))}
 
         {sending &&
@@ -736,7 +742,13 @@ function ConversationPage() {
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBubble({
+  message,
+  renderMarkdown = true,
+}: {
+  message: ChatMessage;
+  renderMarkdown?: boolean;
+}) {
   const isUser = message.senderType === "user";
   const time = new Date(message.createdAt);
   const timeStr = time.toLocaleTimeString([], {
@@ -781,13 +793,21 @@ function MessageBubble({ message }: { message: ChatMessage }) {
               : "bg-muted"
           }`}
         >
-          <p
-            className={`text-sm whitespace-pre-wrap break-words ${
-              message.error ? "text-destructive" : ""
-            }`}
-          >
-            {message.content}
-          </p>
+          {!isUser && renderMarkdown && !message.error ? (
+            <div className="text-sm break-words prose prose-sm dark:prose-invert prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:my-2 prose-code:before:content-[''] prose-code:after:content-[''] max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {message.content}
+              </ReactMarkdown>
+            </div>
+          ) : (
+            <p
+              className={`text-sm whitespace-pre-wrap break-words ${
+                message.error ? "text-destructive" : ""
+              }`}
+            >
+              {message.content}
+            </p>
+          )}
         </div>
         {meta && (
           <div className="mt-1.5 flex flex-col gap-1">
