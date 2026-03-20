@@ -86,6 +86,7 @@ interface ChatMessage {
   senderType: string;
   createdAt: string | Date;
   pending?: boolean;
+  pendingDelivery?: boolean;
   error?: boolean;
   openclawMeta?: OpenClawMeta;
 }
@@ -805,13 +806,24 @@ function MessageBubble({
     return (
       <div className="flex items-start gap-3 justify-end">
         <div className="flex flex-col items-end max-w-[80%]">
-          <div className="rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2">
+          <div className={`rounded-2xl rounded-tr-sm px-4 py-2 ${
+            message.pendingDelivery
+              ? "bg-primary/50 text-primary-foreground"
+              : "bg-primary text-primary-foreground"
+          }`}>
             <p className="text-sm whitespace-pre-wrap break-words">
               {message.content}
             </p>
           </div>
-          <span className="text-[10px] text-muted-foreground mt-1">
-            {timeStr}
+          <span className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+            {message.pendingDelivery ? (
+              <>
+                <Clock className="h-3 w-3" />
+                Pending delivery — agent offline
+              </>
+            ) : (
+              timeStr
+            )}
           </span>
         </div>
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 shrink-0">

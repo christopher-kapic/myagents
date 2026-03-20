@@ -10,6 +10,7 @@ interface ChatMessage {
   senderType: string;
   createdAt: string | Date;
   pending?: boolean;
+  pendingDelivery?: boolean;
   error?: boolean;
   openclawMeta?: {
     provider?: string;
@@ -154,23 +155,42 @@ export function useConversationSocket({
         }
       }
 
-      // Handle error responses from message.send
-      if (
-        frame.method === "message.send" &&
-        frame.type === "res" &&
-        frame.error
-      ) {
-        setLocalMessages((prev) => [
-          ...prev,
-          {
-            id: `error-${Date.now()}`,
-            content: frame.error ?? "Failed to send message",
-            senderType: "agent",
-            createdAt: new Date().toISOString(),
-            error: true,
-          },
-        ]);
-        setSending(false);
+      // Handle responses from message.send
+      if (frame.method === "message.send" && frame.type === "res") {
+        if (frame.error) {
+          setLocalMessages((prev) => [
+            ...prev,
+            {
+              id: `error-${Date.now()}`,
+              content: frame.error ?? "Failed to send message",
+              senderType: "agent",
+              createdAt: new Date().toISOString(),
+              error: true,
+            },
+          ]);
+          setSending(false);
+        } else {
+          // Check if message was queued for offline delivery
+          const resPayload = frame.payload as {
+            conversationId?: string;
+            messageId?: string;
+            queued?: boolean;
+          };
+          if (resPayload?.queued && resPayload.conversationId === conversationId) {
+            // Mark the user message as pending delivery
+            setLocalMessages((prev) => {
+              const lastUserIdx = [...prev].reverse().findIndex((m) => m.senderType === "user");
+              if (lastUserIdx === -1) return prev;
+              const idx = prev.length - 1 - lastUserIdx;
+              return [
+                ...prev.slice(0, idx),
+                { ...prev[idx], id: resPayload.messageId ?? prev[idx].id, pendingDelivery: true },
+                ...prev.slice(idx + 1),
+              ];
+            });
+            setSending(false);
+          }
+        }
       }
 
       // Handle streaming error
@@ -238,14 +258,58 @@ export function useConversationSocket({
         }
       }
 
-      // Handle queue.dequeued
+      // Handle queue.dequeued (both regular queue and offline delivery)
       if (frame.method === "queue.dequeued") {
-        const payload = frame.payload as { conversationId?: string };
+        const payload = frame.payload as {
+          conversationId?: string;
+          messageId?: string;
+          offlineDelivered?: boolean;
+        };
         if (payload?.conversationId === conversationId) {
           queryClient.invalidateQueries({
             queryKey: orpc.queuedMessages.list.queryOptions({
               input: { conversationId },
             }).queryKey,
+          });
+          // Clear pendingDelivery flag when offline message is delivered
+          if (payload.offlineDelivered && payload.messageId) {
+            setLocalMessages((prev) =>
+              prev.map((m) =>
+                m.id === payload.messageId
+                  ? { ...m, pendingDelivery: false }
+                  : m,
+              ),
+            );
+            setSending(true);
+          }
+        }
+      }
+
+      // Handle queue.expired — offline-queued message TTL expired
+      if (frame.method === "queue.expired") {
+        const payload = frame.payload as {
+          conversationId?: string;
+          messageId?: string;
+          error?: string;
+        };
+        if (payload?.conversationId === conversationId) {
+          // Remove pendingDelivery flag and show error
+          setLocalMessages((prev) => {
+            const updated = prev.map((m) =>
+              m.id === payload.messageId
+                ? { ...m, pendingDelivery: false }
+                : m,
+            );
+            return [
+              ...updated,
+              {
+                id: `expired-${Date.now()}`,
+                content: payload.error ?? "Message could not be delivered — agent was offline too long.",
+                senderType: "agent",
+                createdAt: new Date().toISOString(),
+                error: true,
+              },
+            ];
           });
         }
       }

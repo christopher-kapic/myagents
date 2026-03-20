@@ -20,6 +20,7 @@ export const FrameMethod = z.enum([
   "agent.configUpdate",
   "agent.circuitBreaker.reset",
   "queue.dequeued",
+  "queue.expired",
   "conversation.start",
 ]);
 export type FrameMethod = z.infer<typeof FrameMethod>;

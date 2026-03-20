@@ -78,6 +78,129 @@ export const connectionRegistry = {
   },
 };
 
+// ─── Offline Message Queue ────────────────────────────────────────────────────
+// In-memory queue for messages sent while an agent's CLI node is disconnected.
+// Messages have a 5-minute TTL; expired messages are discarded with an error
+// notification to the user.
+
+const OFFLINE_QUEUE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+interface OfflineQueuedMessage {
+  conversationId: string;
+  messageId: string;
+  content: string;
+  userId: string;
+  agentId: string;
+  agentSlug: string;
+  timer: ReturnType<typeof setTimeout>;
+  createdAt: number;
+}
+
+/** Maps agentId → OfflineQueuedMessage[] */
+const offlineMessageQueue = new Map<string, OfflineQueuedMessage[]>();
+
+function expireOfflineMessage(agentId: string, messageId: string) {
+  const queue = offlineMessageQueue.get(agentId);
+  if (!queue) return;
+
+  const idx = queue.findIndex((m) => m.messageId === messageId);
+  if (idx === -1) return;
+
+  const [msg] = queue.splice(idx, 1);
+  if (!msg) return;
+  if (queue.length === 0) offlineMessageQueue.delete(agentId);
+
+  // Save an error message to DB so the conversation history shows the failure
+  void prisma.message.create({
+    data: {
+      conversationId: msg.conversationId,
+      senderType: "agent",
+      senderId: msg.agentId,
+      content: `Message could not be delivered — agent was offline for more than ${OFFLINE_QUEUE_TTL_MS / 60000} minutes.`,
+      error: true,
+    },
+  });
+
+  // Notify user's client connections
+  const clientConns = connectionRegistry.getClientConnections(msg.userId);
+  const expiredFrame = createEventFrame("queue.expired", {
+    conversationId: msg.conversationId,
+    messageId: msg.messageId,
+    error: `Agent "${msg.agentSlug}" was offline too long — message could not be delivered.`,
+  });
+  const serialized = serializeFrame(expiredFrame);
+  for (const client of clientConns) {
+    if (client.ws.readyState === 1) {
+      client.ws.send(serialized);
+    }
+  }
+}
+
+async function processOfflineQueueForAgent(
+  agentId: string,
+  agentSlug: string,
+  nodeConn: NodeConnection,
+) {
+  const queue = offlineMessageQueue.get(agentId);
+  if (!queue || queue.length === 0) return;
+
+  // Take all messages and clear the queue
+  const messages = [...queue];
+  offlineMessageQueue.delete(agentId);
+
+  // Clear all TTL timers
+  for (const msg of messages) {
+    clearTimeout(msg.timer);
+  }
+
+  console.log(`[WS] Processing ${messages.length} offline-queued message(s) for agent ${agentSlug}`);
+
+  // Process each message in order
+  for (const msg of messages) {
+    try {
+      // Fetch recent message history for context
+      const recentMessages = await prisma.message.findMany({
+        where: { conversationId: msg.conversationId },
+        select: { content: true, senderType: true },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      });
+      const history = recentMessages.reverse().map((m) => ({
+        role: String(m.senderType) === "user" ? "user" as const : "agent" as const,
+        content: m.content,
+      }));
+
+      // Forward to CLI node
+      const forwardFrame = createRequestFrame("message.send", {
+        conversationId: msg.conversationId,
+        agentSlug,
+        content: msg.content,
+        messageId: msg.messageId,
+        history,
+      });
+      nodeConn.ws.send(serializeFrame(forwardFrame));
+
+      // Broadcast message delivery to user's client connections
+      const clientConns = connectionRegistry.getClientConnections(msg.userId);
+      const deliveredFrame = createEventFrame("queue.dequeued", {
+        conversationId: msg.conversationId,
+        messageId: msg.messageId,
+        offlineDelivered: true,
+      });
+      const serialized = serializeFrame(deliveredFrame);
+      for (const client of clientConns) {
+        if (client.ws.readyState === 1) {
+          client.ws.send(serialized);
+        }
+      }
+    } catch (err) {
+      console.error("[WS] Error processing offline queued message:", err);
+    }
+  }
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+
 function hashKey(key: string): string {
   return createHash("sha256").update(key).digest("hex");
 }
@@ -437,6 +560,12 @@ async function handleAgentRegister(
     await prisma.agentUptimeLog.create({
       data: { agentId: agent.id, status: "online" },
     });
+
+    // Process any messages queued while the agent was offline
+    const nodeConn = connectionRegistry.getNodeConnection(connection.nodeId);
+    if (nodeConn) {
+      void processOfflineQueueForAgent(agent.id, agent.slug, nodeConn);
+    }
 
     // Return DB values so CLI can sync its local YAML
     const dbTimeout = agent.adapterConfig && typeof agent.adapterConfig === "object"
@@ -1006,28 +1135,23 @@ async function handleMessageSend(
 
   // Check if agent's node is connected
   const nodeConn = connectionRegistry.getNodeConnection(agent.nodeId);
-  if (!nodeConn || nodeConn.ws.readyState !== 1) {
-    return createResponseFrame(
-      "message.send",
-      undefined,
-      frame.id,
-      `Agent "${agentSlug}" is offline`,
-    );
-  }
+  const agentIsOnline = nodeConn && nodeConn.ws.readyState === 1;
 
-  // Rate limit check
-  const rateCheck = checkRateLimit(agent.id, agent.rateLimitPerMin);
-  if (!rateCheck.allowed) {
-    return createResponseFrame(
-      "message.send",
-      {
-        rateLimited: true,
-        retryAfterMs: rateCheck.retryAfterMs,
-        limit: rateCheck.limit,
-      },
-      frame.id,
-      `Rate limit exceeded for agent "${agentSlug}": max ${rateCheck.limit} messages/min. Retry after ${Math.ceil(rateCheck.retryAfterMs / 1000)}s.`,
-    );
+  if (agentIsOnline) {
+    // Rate limit check (only when agent is online and we'll deliver immediately)
+    const rateCheck = checkRateLimit(agent.id, agent.rateLimitPerMin);
+    if (!rateCheck.allowed) {
+      return createResponseFrame(
+        "message.send",
+        {
+          rateLimited: true,
+          retryAfterMs: rateCheck.retryAfterMs,
+          limit: rateCheck.limit,
+        },
+        frame.id,
+        `Rate limit exceeded for agent "${agentSlug}": max ${rateCheck.limit} messages/min. Retry after ${Math.ceil(rateCheck.retryAfterMs / 1000)}s.`,
+      );
+    }
   }
 
   // Get or create conversation
@@ -1058,18 +1182,6 @@ async function handleMessageSend(
     }
   }
 
-  // Fetch recent message history for context (before saving current message)
-  const recentMessages = await prisma.message.findMany({
-    where: { conversationId },
-    select: { content: true, senderType: true },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-  });
-  const history = recentMessages.reverse().map((m) => ({
-    role: String(m.senderType) === "user" ? "user" as const : "agent" as const,
-    content: m.content,
-  }));
-
   // Save user message to DB
   const message = await prisma.message.create({
     data: {
@@ -1080,17 +1192,6 @@ async function handleMessageSend(
     },
     select: { id: true },
   });
-
-  // Forward to CLI node (include history for context)
-  const forwardFrame = createRequestFrame("message.send", {
-    conversationId,
-    agentSlug: agent.slug,
-    content,
-    messageId: message.id,
-    history,
-    ...(openclawAgentId ? { openclawAgentId } : {}),
-  });
-  nodeConn.ws.send(serializeFrame(forwardFrame));
 
   // Broadcast message.new to all other client connections so other
   // devices/browsers see the user message and the loading state
@@ -1108,6 +1209,57 @@ async function handleMessageSend(
       client.ws.send(serializedNew);
     }
   }
+
+  // If agent is offline, queue the message for delivery on reconnect
+  if (!agentIsOnline) {
+    const queueEntry: OfflineQueuedMessage = {
+      conversationId,
+      messageId: message.id,
+      content,
+      userId,
+      agentId: agent.id,
+      agentSlug,
+      createdAt: Date.now(),
+      timer: setTimeout(() => {
+        expireOfflineMessage(agent.id, message.id);
+      }, OFFLINE_QUEUE_TTL_MS),
+    };
+
+    const existing = offlineMessageQueue.get(agent.id) ?? [];
+    existing.push(queueEntry);
+    offlineMessageQueue.set(agent.id, existing);
+
+    console.log(`[WS] Message queued for offline agent "${agentSlug}" (TTL: ${OFFLINE_QUEUE_TTL_MS / 1000}s)`);
+
+    return createResponseFrame(
+      "message.send",
+      { conversationId, messageId: message.id, queued: true },
+      frame.id,
+    );
+  }
+
+  // Fetch recent message history for context (before forwarding)
+  const recentMessages = await prisma.message.findMany({
+    where: { conversationId },
+    select: { content: true, senderType: true },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+  const history = recentMessages.reverse().map((m) => ({
+    role: String(m.senderType) === "user" ? "user" as const : "agent" as const,
+    content: m.content,
+  }));
+
+  // Forward to CLI node (include history for context)
+  const forwardFrame = createRequestFrame("message.send", {
+    conversationId,
+    agentSlug: agent.slug,
+    content,
+    messageId: message.id,
+    history,
+    ...(openclawAgentId ? { openclawAgentId } : {}),
+  });
+  nodeConn.ws.send(serializeFrame(forwardFrame));
 
   // Respond to sender with conversation and message IDs
   return createResponseFrame(
