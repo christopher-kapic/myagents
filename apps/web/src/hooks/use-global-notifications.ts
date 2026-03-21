@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useParams } from "@tanstack/react-router";
+import { useParams, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import type { Frame } from "@myagents/shared";
 
@@ -17,14 +17,17 @@ export function useGlobalNotifications(
   subscribe: (handler: (frame: Frame) => void) => () => void,
 ) {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const params = useParams({ strict: false }) as { id?: string };
   const activeConversationIdRef = useRef<string | undefined>(params.id);
 
   // Keep ref in sync without re-subscribing
+  // effect:audited — syncs route param to ref without re-subscribing the WS listener
   useEffect(() => {
     activeConversationIdRef.current = params.id;
   }, [params.id]);
 
+  // effect:audited — subscribes to external WebSocket event stream
   useEffect(() => {
     const unsubscribe = subscribe((frame) => {
       if (frame.method !== "message.done") return;
@@ -33,6 +36,7 @@ export function useGlobalNotifications(
         conversationId?: string;
         content?: string;
         error?: boolean;
+        agentSlug?: string;
       };
 
       if (!payload?.conversationId || !payload.content || payload.error) return;
@@ -43,13 +47,26 @@ export function useGlobalNotifications(
       // Play notification sound
       void playSound(impactWoodLight003Sound.dataUri, { volume: 0.6 });
 
-      // Show toast with truncated preview
+      // Show toast with truncated preview — clicking navigates to the conversation
       const preview =
         payload.content.length > 100
           ? payload.content.slice(0, 100) + "..."
           : payload.content;
 
-      toast("New agent message", { description: preview });
+      const conversationId = payload.conversationId;
+
+      toast("New agent message", {
+        description: preview,
+        action: {
+          label: "View",
+          onClick: () => {
+            router.navigate({
+              to: "/conversations/$id",
+              params: { id: conversationId },
+            });
+          },
+        },
+      });
 
       // Invalidate conversation lists so unread dots appear
       queryClient.invalidateQueries({
@@ -62,5 +79,5 @@ export function useGlobalNotifications(
     });
 
     return unsubscribe;
-  }, [subscribe, queryClient]);
+  }, [subscribe, queryClient, router]);
 }

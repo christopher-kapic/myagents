@@ -1,12 +1,16 @@
 model AgentPermission {
-  id            String   @id @default(cuid(2))
-  agentId       String
-  agent         Agent    @relation("permissionsGranted", fields: [agentId], references: [id], onDelete: Cascade)
-  targetAgentId String
-  targetAgent   Agent    @relation("permissionsReceived", fields: [targetAgentId], references: [id], onDelete: Cascade)
-  createdBy     String
-  creator       User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
-  createdAt     DateTime @default(now())
+  id              String   @id @default(cuid(2))
+  agentId         String
+  agent           Agent    @relation("permissionsGranted", fields: [agentId], references: [id], onDelete: Cascade)
+  targetAgentId   String
+  targetAgent     Agent    @relation("permissionsReceived", fields: [targetAgentId], references: [id], onDelete: Cascade)
+  createdBy       String
+  creator         User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  status          String   @default("pending") // "pending" | "approved"
+  senderEnabled   Boolean  @default(true)
+  receiverEnabled Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@unique([agentId, targetAgentId])
   @@index([agentId])

@@ -693,9 +693,12 @@ async function handleAgentList(
       );
     }
 
-    // Query permissions: find all agents this agent can send to
+    // Query permissions: find all agents this agent can actively send to
     const permissionWhere: Record<string, unknown> = {
       agentId: senderAgent.id,
+      status: "approved",
+      senderEnabled: true,
+      receiverEnabled: true,
     };
 
     // Build filters for the target agent
@@ -1362,13 +1365,14 @@ async function handleAgentToAgentSend(
     );
   }
 
-  // Check permission: sender → target
-  const permission = await prisma.agentPermission.findUnique({
+  // Check permission: sender → target (must be approved with both sides enabled)
+  const permission = await prisma.agentPermission.findFirst({
     where: {
-      agentId_targetAgentId: {
-        agentId: senderAgent.id,
-        targetAgentId: targetAgent.id,
-      },
+      agentId: senderAgent.id,
+      targetAgentId: targetAgent.id,
+      status: "approved",
+      senderEnabled: true,
+      receiverEnabled: true,
     },
   });
 
@@ -1377,7 +1381,7 @@ async function handleAgentToAgentSend(
       "message.send",
       undefined,
       frame.id,
-      `Agent "${senderSlug}" does not have permission to message "${targetAddress}"`,
+      `Agent "${senderSlug}" does not have an active permission to message "${targetAddress}"`,
     );
   }
 

@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Bot,
+  Check,
   Clock,
   Copy,
   Download,
@@ -43,6 +44,7 @@ import {
   Wifi,
   WifiOff,
   X,
+  XCircle,
   Zap,
 } from "lucide-react";
 import { useState } from "react";
@@ -69,6 +71,11 @@ function AgentDetailPage() {
 
   const agentQuery = useQuery(
     orpc.agents.get.queryOptions({ input: { slug } }),
+  );
+
+  // Fetch pending permission request count for badge
+  const pendingQuery = useQuery(
+    orpc.permissions.listPending.queryOptions(),
   );
 
   if (agentQuery.isLoading) {
@@ -103,6 +110,12 @@ function AgentDetailPage() {
   const node = agent.node as Record<string, unknown> | undefined;
   const isOnline = agent.status === "online";
   const isOwn = !slug.includes("/");
+
+  const pendingCount = isOwn
+    ? ((pendingQuery.data ?? []) as Array<{ targetAgent: { id: string } }>).filter(
+        (p) => p.targetAgent.id === String(agent.id),
+      ).length
+    : 0;
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -210,6 +223,11 @@ function AgentDetailPage() {
           >
             <Shield className="h-4 w-4" />
             Permissions
+            {pendingCount > 0 && (
+              <span className="inline-flex items-center justify-center rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-medium text-destructive-foreground min-w-[18px]">
+                {pendingCount}
+              </span>
+            )}
           </button>
         )}
         {isOwn && (
@@ -602,6 +620,51 @@ function RemoveShareDialog({
   );
 }
 
+type PermissionAgent = {
+  id: string;
+  slug: string;
+  name: string;
+  type: string;
+  status: string;
+  userId: string;
+  username?: string | null;
+};
+
+type PermissionEntry = {
+  id: string;
+  permissionStatus: string;
+  senderEnabled: boolean;
+  receiverEnabled: boolean;
+  createdAt: string;
+  agent: PermissionAgent;
+};
+
+type PendingEntry = {
+  id: string;
+  createdAt: string;
+  agent: PermissionAgent;
+};
+
+function getConnectionStatus(p: PermissionEntry, isOwnAgent: boolean): { label: string; className: string } {
+  if (p.permissionStatus === "pending") {
+    return { label: "Pending approval", className: "text-amber-600 dark:text-amber-400" };
+  }
+  if (p.senderEnabled && p.receiverEnabled) {
+    return { label: "Active", className: "text-green-600 dark:text-green-400" };
+  }
+  if (isOwnAgent) {
+    // Same user owns both — if disabled, it was toggled off by the user
+    return { label: "Paused", className: "text-muted-foreground" };
+  }
+  if (!p.senderEnabled && !p.receiverEnabled) {
+    return { label: "Paused by both sides", className: "text-muted-foreground" };
+  }
+  if (!p.senderEnabled) {
+    return { label: "Paused by sender", className: "text-muted-foreground" };
+  }
+  return { label: "Paused by receiver", className: "text-muted-foreground" };
+}
+
 function PermissionsTab({
   agent,
   slug,
@@ -611,7 +674,17 @@ function PermissionsTab({
 }) {
   const queryClient = useQueryClient();
   const agentId = String(agent.id);
+  const agentUserId = String(agent.userId);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const invalidatePermissions = () => {
+    queryClient.invalidateQueries({
+      queryKey: orpc.permissions.list.queryOptions({ input: { agentId } }).queryKey,
+    });
+    queryClient.invalidateQueries({
+      queryKey: orpc.permissions.listPending.queryOptions().queryKey,
+    });
+  };
 
   // Fetch shares for this agent
   const sharesQuery = useQuery(
@@ -626,54 +699,41 @@ function PermissionsTab({
   // Fetch user's own agents to show as toggleable targets
   const agentsQuery = useQuery(orpc.agents.list.queryOptions());
 
-  const grantMutation = useMutation({
+  const requestMutation = useMutation({
     mutationFn: (targetAgentId: string) =>
-      orpc.permissions.grant.call({ agentId, targetAgentId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: orpc.permissions.list.queryOptions({ input: { agentId } })
-          .queryKey,
-      });
-    },
+      orpc.permissions.request.call({ agentId, targetAgentId }),
+    onSuccess: invalidatePermissions,
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: ({ permissionId, enabled }: { permissionId: string; enabled: boolean }) =>
+      orpc.permissions.toggle.call({ permissionId, enabled }),
+    onSuccess: invalidatePermissions,
   });
 
   const revokeMutation = useMutation({
-    mutationFn: (targetAgentId: string) =>
-      orpc.permissions.revoke.call({ agentId, targetAgentId }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: orpc.permissions.list.queryOptions({ input: { agentId } })
-          .queryKey,
-      });
-    },
+    mutationFn: (permissionId: string) =>
+      orpc.permissions.revoke.call({ permissionId }),
+    onSuccess: invalidatePermissions,
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (permissionId: string) =>
+      orpc.permissions.approve.call({ permissionId }),
+    onSuccess: invalidatePermissions,
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (permissionId: string) =>
+      orpc.permissions.reject.call({ permissionId }),
+    onSuccess: invalidatePermissions,
   });
 
   const permissions = permissionsQuery.data as
     | {
-        canSendTo: Array<{
-          id: string;
-          agent: {
-            id: string;
-            slug: string;
-            name: string;
-            type: string;
-            status: string;
-            userId: string;
-            username?: string | null;
-          };
-        }>;
-        canReceiveFrom: Array<{
-          id: string;
-          agent: {
-            id: string;
-            slug: string;
-            name: string;
-            type: string;
-            status: string;
-            userId: string;
-            username?: string | null;
-          };
-        }>;
+        canSendTo: PermissionEntry[];
+        canReceiveFrom: PermissionEntry[];
+        pendingIncoming: PendingEntry[];
       }
     | undefined;
 
@@ -695,8 +755,9 @@ function PermissionsTab({
     return { agent: a, displaySlug };
   });
 
-  const canSendToIds = new Set(
-    (permissions?.canSendTo ?? []).map((p) => p.agent.id),
+  // Map from target agent ID to its permission entry (for "can send to")
+  const sendToMap = new Map(
+    (permissions?.canSendTo ?? []).map((p) => [p.agent.id, p]),
   );
 
   // Filter agents by search query
@@ -715,29 +776,61 @@ function PermissionsTab({
     filterAgent(s.agent, s.displaySlug),
   );
 
-  const handleToggleSendTo = (targetId: string, currentlyGranted: boolean) => {
-    if (currentlyGranted) {
-      revokeMutation.mutate(targetId);
+  const handleSendToToggle = (targetId: string, targetUserId: string) => {
+    const existing = sendToMap.get(targetId);
+    if (!existing) {
+      // No permission yet — request one
+      requestMutation.mutate(targetId);
+    } else if (existing.permissionStatus === "pending") {
+      // Still pending — revoke the request
+      revokeMutation.mutate(existing.id);
     } else {
-      grantMutation.mutate(targetId);
+      // Approved — toggle sender side (same-user toggles both)
+      const isOwnAgent = targetUserId === agentUserId;
+      const currentlyEnabled = isOwnAgent
+        ? existing.senderEnabled && existing.receiverEnabled
+        : existing.senderEnabled;
+      toggleMutation.mutate({ permissionId: existing.id, enabled: !currentlyEnabled });
     }
   };
 
-  const handleAllowAll = () => {
-    const allTargets = [
-      ...ownAgents.map((a) => String(a.id)),
-    ];
-    for (const targetId of allTargets) {
-      if (!canSendToIds.has(targetId)) {
-        grantMutation.mutate(targetId);
+  const handleAllowAllOwn = () => {
+    for (const a of ownAgents) {
+      const id = String(a.id);
+      const existing = sendToMap.get(id);
+      if (!existing) {
+        requestMutation.mutate(id);
+      } else if (existing.permissionStatus === "approved" && !existing.senderEnabled) {
+        toggleMutation.mutate({ permissionId: existing.id, enabled: true });
       }
     }
   };
 
   const handleDenyAll = () => {
     for (const p of permissions?.canSendTo ?? []) {
-      revokeMutation.mutate(p.agent.id);
+      if (p.permissionStatus === "approved" && p.senderEnabled) {
+        toggleMutation.mutate({ permissionId: p.id, enabled: false });
+      } else if (p.permissionStatus === "pending") {
+        revokeMutation.mutate(p.id);
+      }
     }
+  };
+
+  const getSendToChecked = (targetId: string, targetUserId: string): boolean => {
+    const p = sendToMap.get(targetId);
+    if (!p) return false;
+    if (p.permissionStatus === "pending") return false;
+    const isOwnAgent = targetUserId === agentUserId;
+    return isOwnAgent
+      ? p.senderEnabled && p.receiverEnabled
+      : p.senderEnabled;
+  };
+
+  const getSendToStatus = (targetId: string, targetUserId: string) => {
+    const p = sendToMap.get(targetId);
+    if (!p) return null;
+    const isOwnAgent = targetUserId === agentUserId;
+    return getConnectionStatus(p, isOwnAgent);
   };
 
   const shares = (sharesQuery.data ?? []) as Array<{
@@ -770,6 +863,13 @@ function PermissionsTab({
       });
     },
   });
+
+  const isMutating =
+    requestMutation.isPending ||
+    toggleMutation.isPending ||
+    revokeMutation.isPending ||
+    approveMutation.isPending ||
+    rejectMutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -842,6 +942,72 @@ function PermissionsTab({
         </CardContent>
       </Card>
 
+      {/* Pending Incoming Requests */}
+      {(permissions?.pendingIncoming ?? []).length > 0 && (
+        <Card className="border-amber-200 dark:border-amber-800">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              Pending Connection Requests
+            </CardTitle>
+            <CardDescription>
+              These agents are requesting permission to send messages to this
+              agent.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {(permissions?.pendingIncoming ?? []).map((p) => {
+                const displaySlug =
+                  p.agent.username && p.agent.userId !== agentUserId
+                    ? `${p.agent.username}/${p.agent.slug}`
+                    : p.agent.slug;
+                return (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between rounded-lg border px-4 py-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Bot className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {p.agent.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {displaySlug} &middot; {p.agent.type}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1 text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950"
+                        onClick={() => approveMutation.mutate(p.id)}
+                        disabled={isMutating}
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        Approve
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1 text-destructive hover:bg-destructive/10"
+                        onClick={() => rejectMutation.mutate(p.id)}
+                        disabled={isMutating}
+                      >
+                        <XCircle className="h-3.5 w-3.5" />
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Can Send To */}
       <Card>
         <CardHeader>
@@ -849,15 +1015,16 @@ function PermissionsTab({
             <div>
               <CardTitle>Can send messages to</CardTitle>
               <CardDescription>
-                Agents that this agent is allowed to message.
+                Toggle to request or enable messaging to other agents. Both
+                sides must approve for the connection to be active.
               </CardDescription>
             </div>
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleAllowAll}
-                disabled={grantMutation.isPending}
+                onClick={handleAllowAllOwn}
+                disabled={isMutating}
               >
                 Allow all my agents
               </Button>
@@ -865,7 +1032,7 @@ function PermissionsTab({
                 variant="outline"
                 size="sm"
                 onClick={handleDenyAll}
-                disabled={revokeMutation.isPending}
+                disabled={isMutating}
               >
                 Deny all
               </Button>
@@ -903,7 +1070,9 @@ function PermissionsTab({
                 <>
                   {filteredOwnAgents.map((a) => {
                     const id = String(a.id);
-                    const granted = canSendToIds.has(id);
+                    const targetUserId = String(a.userId);
+                    const checked = getSendToChecked(id, targetUserId);
+                    const status = getSendToStatus(id, targetUserId);
                     return (
                       <div
                         key={id}
@@ -917,24 +1086,29 @@ function PermissionsTab({
                             </p>
                             <p className="text-xs text-muted-foreground truncate">
                               {String(a.slug)} &middot; {String(a.type)}
+                              {status && (
+                                <span className={`ml-2 ${status.className}`}>
+                                  &middot; {status.label}
+                                </span>
+                              )}
                             </p>
                           </div>
                         </div>
                         <Switch
-                          checked={granted}
+                          checked={checked}
                           onCheckedChange={() =>
-                            handleToggleSendTo(id, granted)
+                            handleSendToToggle(id, targetUserId)
                           }
-                          disabled={
-                            grantMutation.isPending || revokeMutation.isPending
-                          }
+                          disabled={isMutating}
                         />
                       </div>
                     );
                   })}
                   {filteredSharedAgents.map((s) => {
                     const id = String(s.agent.id);
-                    const granted = canSendToIds.has(id);
+                    const targetUserId = String(s.agent.userId ?? (s.agent.user as Record<string, unknown>)?.id ?? "");
+                    const checked = getSendToChecked(id, targetUserId);
+                    const status = getSendToStatus(id, targetUserId);
                     return (
                       <div
                         key={id}
@@ -948,17 +1122,20 @@ function PermissionsTab({
                             </p>
                             <p className="text-xs text-muted-foreground truncate">
                               {s.displaySlug} &middot; {String(s.agent.type)}
+                              {status && (
+                                <span className={`ml-2 ${status.className}`}>
+                                  &middot; {status.label}
+                                </span>
+                              )}
                             </p>
                           </div>
                         </div>
                         <Switch
-                          checked={granted}
+                          checked={checked}
                           onCheckedChange={() =>
-                            handleToggleSendTo(id, granted)
+                            handleSendToToggle(id, targetUserId)
                           }
-                          disabled={
-                            grantMutation.isPending || revokeMutation.isPending
-                          }
+                          disabled={isMutating}
                         />
                       </div>
                     );
@@ -975,7 +1152,8 @@ function PermissionsTab({
         <CardHeader>
           <CardTitle>Can receive messages from</CardTitle>
           <CardDescription>
-            Agents that have been granted permission to message this agent.
+            Approved agents that can message this agent. Toggle to enable or
+            disable your side of the connection.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -987,16 +1165,20 @@ function PermissionsTab({
             </div>
           ) : (permissions?.canReceiveFrom ?? []).length === 0 ? (
             <p className="text-sm text-muted-foreground py-4 text-center">
-              No agents have permission to message this agent yet.
+              No agents have been approved to message this agent yet.
             </p>
           ) : (
             <div className="space-y-1">
               {(permissions?.canReceiveFrom ?? []).map((p) => {
+                const isSameUser = p.agent.userId === agentUserId;
                 const displaySlug =
-                  p.agent.username &&
-                  p.agent.userId !== String(agent.userId)
+                  p.agent.username && !isSameUser
                     ? `${p.agent.username}/${p.agent.slug}`
                     : p.agent.slug;
+                const connStatus = getConnectionStatus(p, isSameUser);
+                const isEnabled = isSameUser
+                  ? p.senderEnabled && p.receiverEnabled
+                  : p.receiverEnabled;
                 return (
                   <div
                     key={p.id}
@@ -1010,25 +1192,33 @@ function PermissionsTab({
                         </p>
                         <p className="text-xs text-muted-foreground truncate">
                           {displaySlug} &middot; {p.agent.type}
+                          <span className={`ml-2 ${connStatus.className}`}>
+                            &middot; {connStatus.label}
+                          </span>
                         </p>
                       </div>
                     </div>
-                    <span
-                      className={`inline-flex items-center gap-1.5 text-xs ${
-                        p.agent.status === "online"
-                          ? "text-green-600 dark:text-green-400"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-1.5 w-1.5 rounded-full ${
-                          p.agent.status === "online"
-                            ? "bg-green-500"
-                            : "bg-muted-foreground"
-                        }`}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <Switch
+                        checked={isEnabled}
+                        onCheckedChange={(checked) =>
+                          toggleMutation.mutate({
+                            permissionId: p.id,
+                            enabled: checked,
+                          })
+                        }
+                        disabled={isMutating}
                       />
-                      {p.agent.status === "online" ? "Online" : "Offline"}
-                    </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => revokeMutation.mutate(p.id)}
+                        disabled={isMutating}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 );
               })}

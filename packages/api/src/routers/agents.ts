@@ -77,6 +77,9 @@ export const agentsRouter = {
 
         const permissionWhere: Record<string, unknown> = {
           agentId: senderAgent.id,
+          status: "approved",
+          senderEnabled: true,
+          receiverEnabled: true,
         };
 
         const targetFilters: Record<string, unknown> = {};
