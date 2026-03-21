@@ -29,7 +29,24 @@ export function useGlobalNotifications(
 
   // effect:audited — subscribes to external WebSocket event stream
   useEffect(() => {
+    const invalidateConversations = () => {
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey.some(
+            (k) => typeof k === "string" && k.includes("conversations"),
+          ),
+      });
+    };
+
     const unsubscribe = subscribe((frame) => {
+      // When a conversation is marked as read, refresh conversation lists
+      // so unread dots disappear
+      if (frame.method === "conversation.read") {
+        invalidateConversations();
+        return;
+      }
+
       if (frame.method !== "message.done") return;
 
       const payload = frame.payload as {
@@ -54,28 +71,27 @@ export function useGlobalNotifications(
           : payload.content;
 
       const conversationId = payload.conversationId;
+      const agentSlug = payload.agentSlug;
 
       toast("New agent message", {
         description: preview,
-        action: {
-          label: "View",
-          onClick: () => {
-            router.navigate({
-              to: "/conversations/$id",
-              params: { id: conversationId },
-            });
-          },
-        },
+        ...(agentSlug
+          ? {
+              action: {
+                label: "View",
+                onClick: () => {
+                  router.navigate({
+                    to: "/agents/$slug/conversations/$id",
+                    params: { slug: agentSlug, id: conversationId },
+                  });
+                },
+              },
+            }
+          : {}),
       });
 
       // Invalidate conversation lists so unread dots appear
-      queryClient.invalidateQueries({
-        predicate: (query) =>
-          Array.isArray(query.queryKey) &&
-          query.queryKey.some(
-            (k) => typeof k === "string" && k.includes("conversations"),
-          ),
-      });
+      invalidateConversations();
     });
 
     return unsubscribe;

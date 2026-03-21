@@ -1933,6 +1933,7 @@ async function handleMessageDone(
     conversationId: payload.conversationId,
     messageId,
     content: payload.content,
+    agentSlug: conversation.agent.slug,
     error: payload.error || undefined,
     ...(payload.openclawMeta ? { openclawMeta: payload.openclawMeta } : {}),
   });
