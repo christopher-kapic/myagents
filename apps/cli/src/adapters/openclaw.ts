@@ -113,6 +113,10 @@ export class OpenClawAdapter implements AgentAdapter {
     history: Array<{ role: "user" | "agent"; content: string }>,
   ): AsyncGenerator<string> {
     const messages = [
+      {
+        role: "system",
+        content: `Your MyAgents identity is "${this.agentSlug}". When sending messages via the myagents CLI, use \`--as ${this.agentSlug}\` to identify yourself.`,
+      },
       ...history.map((h) => ({
         role: h.role === "agent" ? "assistant" : "user",
         content: h.content,
