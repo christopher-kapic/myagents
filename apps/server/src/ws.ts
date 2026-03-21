@@ -421,6 +421,10 @@ async function handleFrame(
       return handleConversationStart(frame, connection);
     }
 
+    case "conversation.read": {
+      return handleConversationRead(frame, connection);
+    }
+
     case "agent.status":
     case "auth":
       console.log(`[WS] received ${frame.method} from ${connection.type}`);
@@ -2341,4 +2345,43 @@ async function handleConversationStart(
     conversationId: conversation.id,
     messageId: message.id,
   }, frame.id);
+}
+
+/**
+ * Handle conversation.read — update readAt timestamp and broadcast to other clients.
+ */
+async function handleConversationRead(
+  frame: Frame,
+  connection: Connection,
+): Promise<Frame | null> {
+  if (connection.type !== "client") return null;
+
+  const payload = frame.payload as { conversationId?: string };
+  if (!payload?.conversationId) return null;
+
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: payload.conversationId },
+    select: { userId: true },
+  });
+
+  if (!conversation || conversation.userId !== connection.userId) return null;
+
+  await prisma.conversation.update({
+    where: { id: payload.conversationId },
+    data: { readAt: new Date() },
+  });
+
+  // Broadcast to other client connections so they clear the unread dot too
+  const clientConns = connectionRegistry.getClientConnections(connection.userId);
+  const eventFrame = createEventFrame("conversation.read", {
+    conversationId: payload.conversationId,
+  });
+  const serialized = serializeFrame(eventFrame);
+  for (const client of clientConns) {
+    if (client.ws !== connection.ws && client.ws.readyState === 1) {
+      client.ws.send(serialized);
+    }
+  }
+
+  return null;
 }

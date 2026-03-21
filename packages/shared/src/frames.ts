@@ -22,6 +22,7 @@ export const FrameMethod = z.enum([
   "queue.dequeued",
   "queue.expired",
   "conversation.start",
+  "conversation.read",
 ]);
 export type FrameMethod = z.infer<typeof FrameMethod>;
 

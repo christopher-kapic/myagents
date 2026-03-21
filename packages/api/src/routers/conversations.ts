@@ -9,6 +9,7 @@ const conversationSelect = {
   title: true,
   createdAt: true,
   updatedAt: true,
+  readAt: true,
   agentId: true,
   userId: true,
   agent: {
@@ -88,8 +89,14 @@ export const conversationsRouter = {
         items: items.map((conv) => {
           const lastMessage = conv.messages[0];
           const { messages: _, ...rest } = conv;
+          const hasUnread =
+            lastMessage &&
+            String(lastMessage.senderType) === "agent" &&
+            !lastMessage.error &&
+            (!conv.readAt || lastMessage.createdAt > conv.readAt);
           return {
             ...serializeConversation(rest),
+            hasUnread: !!hasUnread,
             lastMessage: lastMessage
               ? {
                   id: lastMessage.id,
@@ -183,8 +190,14 @@ export const conversationsRouter = {
       return conversations.map((conv) => {
         const lastMessage = conv.messages[0];
         const { messages: _, ...rest } = conv;
+        const hasUnread =
+          lastMessage &&
+          String(lastMessage.senderType) === "agent" &&
+          !lastMessage.error &&
+          (!conv.readAt || lastMessage.createdAt > conv.readAt);
         return {
           ...serializeConversation(rest),
+          hasUnread: !!hasUnread,
           lastMessage: lastMessage
             ? {
                 id: lastMessage.id,
@@ -353,6 +366,34 @@ export const conversationsRouter = {
 
       await prisma.conversation.delete({
         where: { id: input.id },
+      });
+
+      return { success: true };
+    }),
+
+  markAsRead: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: input.id },
+        select: { userId: true },
+      });
+
+      if (!conversation || (!isAdmin(context) && conversation.userId !== userId)) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Conversation not found",
+        });
+      }
+
+      await prisma.conversation.update({
+        where: { id: input.id },
+        data: { readAt: new Date() },
       });
 
       return { success: true };

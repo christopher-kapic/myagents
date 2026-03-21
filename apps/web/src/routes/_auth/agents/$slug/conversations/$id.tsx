@@ -50,6 +50,7 @@ import {
 
 import { useConversationSocket } from "@/hooks/use-conversation-socket";
 import { useFocusOnChange } from "@/hooks/use-focus-on-change";
+import { useMarkAsRead } from "@/hooks/use-mark-as-read";
 import { useMessagesFromQuery } from "@/hooks/use-messages-from-query";
 import { useScrollOnChange } from "@/hooks/use-scroll-on-change";
 import { useTranscriptSync } from "@/hooks/use-transcript-sync";
@@ -108,6 +109,7 @@ function ConversationPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { connected, sendFrame, subscribe } = useWebSocket();
+  useMarkAsRead(id, sendFrame, subscribe);
   const { openDrawer } = useConversationSidebar();
   const [inputValue, setInputValue] = useState("");
   const [localMessages, setLocalMessages] = useState<ChatMessage[]>([]);

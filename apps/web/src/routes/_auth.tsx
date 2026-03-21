@@ -8,6 +8,8 @@ import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { useGlobalNotifications } from "@/hooks/use-global-notifications";
+import { useWebSocket } from "@/hooks/use-websocket";
 import { authClient } from "@/lib/auth-client";
 import { orpc } from "@/utils/orpc";
 
@@ -24,6 +26,8 @@ export const Route = createFileRoute("/_auth")({
 
 function AuthLayout() {
   const { session } = Route.useRouteContext();
+  const { subscribe } = useWebSocket();
+  useGlobalNotifications(subscribe);
   const appSettings = useQuery(orpc.settings.getAll.queryOptions());
 
   if (appSettings.isLoading) {

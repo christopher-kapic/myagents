@@ -12,6 +12,7 @@ model Conversation {
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   agentId        String
   agent          Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  readAt         DateTime?
   sharedVia      String?
   agentShare     AgentShare?      @relation(fields: [sharedVia], references: [id], onDelete: SetNull)
   messages       Message[]

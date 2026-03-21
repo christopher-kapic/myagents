@@ -161,6 +161,7 @@ function ConversationsPage() {
               ? new Date(String(conv.updatedAt))
               : null;
             const agentSlug = agent ? String(agent.slug) : "";
+            const hasUnread = conv.hasUnread === true;
 
             const title = conv.title
               ? String(conv.title)
@@ -176,12 +177,15 @@ function ConversationsPage() {
                   params={{ slug: agentSlug, id: String(conv.id) }}
                   className="flex items-center gap-3 flex-1 min-w-0"
                 >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted shrink-0">
+                  <div className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-muted shrink-0">
                     <Bot className="h-5 w-5 text-muted-foreground" />
+                    {hasUnread ? (
+                      <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-primary" />
+                    ) : null}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium truncate">{title}</p>
+                      <p className={`text-sm truncate ${hasUnread ? "font-semibold" : "font-medium"}`}>{title}</p>
                       {updatedAt ? (
                         <span className="text-xs text-muted-foreground shrink-0">
                           {formatRelativeTime(updatedAt)}
@@ -195,7 +199,7 @@ function ConversationsPage() {
                         </span>
                       ) : null}
                       {lastMessage ? (
-                        <span className="text-xs text-muted-foreground truncate">
+                        <span className={`text-xs truncate ${hasUnread ? "text-foreground font-medium" : "text-muted-foreground"}`}>
                           &middot;{" "}
                           {lastMessage.senderType === "user"
                             ? "You: "

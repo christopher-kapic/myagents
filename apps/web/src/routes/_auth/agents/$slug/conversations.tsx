@@ -190,6 +190,7 @@ function SidebarContent({
               const updatedAt = conv.updatedAt
                 ? new Date(String(conv.updatedAt))
                 : null;
+              const hasUnread = !isActive && conv.hasUnread === true;
 
               const convTitle = conv.title
                 ? String(conv.title)
@@ -211,9 +212,14 @@ function SidebarContent({
                     className="flex-1 min-w-0 px-3 py-2.5"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium truncate">
-                        {convTitle}
-                      </p>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {hasUnread ? (
+                          <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                        ) : null}
+                        <p className={`text-sm truncate ${hasUnread ? "font-semibold" : "font-medium"}`}>
+                          {convTitle}
+                        </p>
+                      </div>
                       {updatedAt ? (
                         <span className="text-[10px] text-muted-foreground shrink-0">
                           {formatRelativeTime(updatedAt)}
@@ -221,7 +227,7 @@ function SidebarContent({
                       ) : null}
                     </div>
                     {lastMessage ? (
-                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                      <p className={`text-xs truncate mt-0.5 ${hasUnread ? "text-foreground font-medium" : "text-muted-foreground"}`}>
                         {lastMessage.senderType === "user" ? "You: " : "Agent: "}
                         {String(lastMessage.content)}
                       </p>
