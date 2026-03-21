@@ -1,3 +1,8 @@
+enum PermissionStatus {
+  PENDING
+  APPROVED
+}
+
 model AgentPermission {
   id              String   @id @default(cuid(2))
   agentId         String
@@ -6,7 +11,7 @@ model AgentPermission {
   targetAgent     Agent    @relation("permissionsReceived", fields: [targetAgentId], references: [id], onDelete: Cascade)
   createdBy       String
   creator         User     @relation(fields: [createdBy], references: [id], onDelete: Cascade)
-  status          String   @default("pending") // "pending" | "approved"
+  status          PermissionStatus @default(PENDING)
   senderEnabled   Boolean  @default(true)
   receiverEnabled Boolean  @default(false)
   createdAt       DateTime @default(now())

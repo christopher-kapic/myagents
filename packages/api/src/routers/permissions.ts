@@ -70,14 +70,14 @@ export const permissionsRouter = {
           agentId: input.agentId,
           targetAgentId: input.targetAgentId,
           createdBy: userId,
-          status: sameUser ? "approved" : "pending",
+          status: sameUser ? "APPROVED" : "PENDING",
           senderEnabled: true,
           receiverEnabled: sameUser,
         },
         update: {
           senderEnabled: true,
           // If same user and it was previously rejected/disabled, re-approve
-          ...(sameUser ? { status: "approved", receiverEnabled: true } : {}),
+          ...(sameUser ? { status: "APPROVED", receiverEnabled: true } : {}),
         },
         select: {
           id: true,
@@ -126,7 +126,7 @@ export const permissionsRouter = {
         });
       }
 
-      if (permission.status === "approved") {
+      if (permission.status === "APPROVED") {
         throw new ORPCError("BAD_REQUEST", {
           message: "Permission is already approved",
         });
@@ -135,7 +135,7 @@ export const permissionsRouter = {
       const updated = await prisma.agentPermission.update({
         where: { id: input.permissionId },
         data: {
-          status: "approved",
+          status: "APPROVED",
           receiverEnabled: true,
         },
         select: {
@@ -354,7 +354,7 @@ export const permissionsRouter = {
       const canReceiveFrom = await prisma.agentPermission.findMany({
         where: {
           targetAgentId: input.agentId,
-          status: "approved",
+          status: "APPROVED",
         },
         select: {
           id: true,
@@ -374,7 +374,7 @@ export const permissionsRouter = {
       const pendingIncoming = await prisma.agentPermission.findMany({
         where: {
           targetAgentId: input.agentId,
-          status: "pending",
+          status: "PENDING",
         },
         select: {
           id: true,
@@ -438,7 +438,7 @@ export const permissionsRouter = {
 
     const pending = await prisma.agentPermission.findMany({
       where: {
-        status: "pending",
+        status: "PENDING",
         targetAgent: { userId },
       },
       select: {

@@ -15,38 +15,42 @@ enum AgentType {
 }
 
 model Node {
-  id       String     @id @default(cuid(2))
-  name     String
-  userId   String
-  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lastSeen DateTime   @default(now())
-  status   NodeStatus @default(offline)
-  agents   Agent[]
+  id        String     @id @default(cuid(2))
+  name      String
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastSeen  DateTime   @default(now())
+  status    NodeStatus @default(offline)
+  agents    Agent[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 
   @@index([userId])
   @@map("node")
 }
 
 model Agent {
-  id            String      @id @default(cuid(2))
-  slug          String
-  name          String
-  description   String?
-  type          AgentType   @default(custom)
-  nodeId        String
-  node          Node        @relation(fields: [nodeId], references: [id], onDelete: Cascade)
-  userId        String
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  status        AgentStatus @default(offline)
-  adapterConfig          Json?
-  renderMarkdown         Boolean     @default(true)
-  rateLimitPerMin        Int         @default(60)
-  circuitBreakerThreshold Int        @default(10)
-  conversations        Conversation[]
-  permissionsGranted   AgentPermission[] @relation("permissionsGranted")
-  permissionsReceived  AgentPermission[] @relation("permissionsReceived")
-  uptimeLogs           AgentUptimeLog[]
-  shares               AgentShare[]
+  id                      String      @id @default(cuid(2))
+  slug                    String
+  name                    String
+  description             String?
+  type                    AgentType   @default(custom)
+  nodeId                  String
+  node                    Node        @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  userId                  String
+  user                    User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status                  AgentStatus @default(offline)
+  adapterConfig           Json?
+  renderMarkdown          Boolean     @default(true)
+  rateLimitPerMin         Int         @default(60)
+  circuitBreakerThreshold Int         @default(10)
+  conversations           Conversation[]
+  permissionsGranted      AgentPermission[] @relation("permissionsGranted")
+  permissionsReceived     AgentPermission[] @relation("permissionsReceived")
+  uptimeLogs              AgentUptimeLog[]
+  shares                  AgentShare[]
+  createdAt               DateTime    @default(now())
+  updatedAt               DateTime    @updatedAt
 
   @@unique([userId, slug])
   @@index([nodeId])

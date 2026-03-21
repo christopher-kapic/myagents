@@ -696,7 +696,7 @@ async function handleAgentList(
     // Query permissions: find all agents this agent can actively send to
     const permissionWhere: Record<string, unknown> = {
       agentId: senderAgent.id,
-      status: "approved",
+      status: "APPROVED",
       senderEnabled: true,
       receiverEnabled: true,
     };
@@ -1370,7 +1370,7 @@ async function handleAgentToAgentSend(
     where: {
       agentId: senderAgent.id,
       targetAgentId: targetAgent.id,
-      status: "approved",
+      status: "APPROVED",
       senderEnabled: true,
       receiverEnabled: true,
     },

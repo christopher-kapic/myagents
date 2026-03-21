@@ -646,7 +646,7 @@ type PendingEntry = {
 };
 
 function getConnectionStatus(p: PermissionEntry, isOwnAgent: boolean): { label: string; className: string } {
-  if (p.permissionStatus === "pending") {
+  if (p.permissionStatus === "PENDING") {
     return { label: "Pending approval", className: "text-amber-600 dark:text-amber-400" };
   }
   if (p.senderEnabled && p.receiverEnabled) {
@@ -781,7 +781,7 @@ function PermissionsTab({
     if (!existing) {
       // No permission yet — request one
       requestMutation.mutate(targetId);
-    } else if (existing.permissionStatus === "pending") {
+    } else if (existing.permissionStatus === "PENDING") {
       // Still pending — revoke the request
       revokeMutation.mutate(existing.id);
     } else {
@@ -800,7 +800,7 @@ function PermissionsTab({
       const existing = sendToMap.get(id);
       if (!existing) {
         requestMutation.mutate(id);
-      } else if (existing.permissionStatus === "approved" && !existing.senderEnabled) {
+      } else if (existing.permissionStatus === "APPROVED" && !existing.senderEnabled) {
         toggleMutation.mutate({ permissionId: existing.id, enabled: true });
       }
     }
@@ -808,9 +808,9 @@ function PermissionsTab({
 
   const handleDenyAll = () => {
     for (const p of permissions?.canSendTo ?? []) {
-      if (p.permissionStatus === "approved" && p.senderEnabled) {
+      if (p.permissionStatus === "APPROVED" && p.senderEnabled) {
         toggleMutation.mutate({ permissionId: p.id, enabled: false });
-      } else if (p.permissionStatus === "pending") {
+      } else if (p.permissionStatus === "PENDING") {
         revokeMutation.mutate(p.id);
       }
     }
@@ -819,7 +819,7 @@ function PermissionsTab({
   const getSendToChecked = (targetId: string, targetUserId: string): boolean => {
     const p = sendToMap.get(targetId);
     if (!p) return false;
-    if (p.permissionStatus === "pending") return false;
+    if (p.permissionStatus === "PENDING") return false;
     const isOwnAgent = targetUserId === agentUserId;
     return isOwnAgent
       ? p.senderEnabled && p.receiverEnabled
