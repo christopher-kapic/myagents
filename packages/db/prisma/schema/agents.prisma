@@ -23,7 +23,7 @@ model Node {
   status    NodeStatus @default(offline)
   agents    Agent[]
   createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  updatedAt DateTime   @default(now()) @updatedAt
 
   @@index([userId])
   @@map("node")
@@ -50,7 +50,7 @@ model Agent {
   uptimeLogs              AgentUptimeLog[]
   shares                  AgentShare[]
   createdAt               DateTime    @default(now())
-  updatedAt               DateTime    @updatedAt
+  updatedAt               DateTime    @default(now()) @updatedAt
 
   @@unique([userId, slug])
   @@index([nodeId])
