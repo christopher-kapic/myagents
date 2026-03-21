@@ -12,7 +12,6 @@ const agentSelect = {
   description: true,
   type: true,
   status: true,
-  shared: true,
   nodeId: true,
   userId: true,
   adapterConfig: true,
@@ -118,7 +117,7 @@ export const agentsRouter = {
 
         return {
           own: [],
-          shared: [],
+          sharedWithMe: [],
           permitted: agents,
         };
       }
@@ -148,7 +147,7 @@ export const agentsRouter = {
 
         return {
           own: ownAgents.map(serializeAgent),
-          shared: otherAgents.map(serializeAgent),
+          sharedWithMe: otherAgents.map(serializeAgent),
         };
       }
 
@@ -174,19 +173,17 @@ export const agentsRouter = {
         orderBy: { name: "asc" },
       });
 
-      // Find shared agents from other users that this user has permissions to access
-      const sharedPermissions = await prisma.agentPermission.findMany({
+      // Find agents shared with this user via AgentShare
+      const activeShares = await prisma.agentShare.findMany({
         where: {
-          createdBy: userId,
-          targetAgent: {
-            userId: { not: userId },
-            shared: true,
-          },
+          userId,
+          active: true,
+          agent: { userId: { not: userId } },
         },
-        select: { targetAgentId: true },
+        select: { agentId: true },
       });
 
-      const sharedAgentIds = sharedPermissions.map((p) => p.targetAgentId);
+      const sharedAgentIds = activeShares.map((s) => s.agentId);
 
       let sharedAgents: Array<Record<string, unknown>> = [];
       if (sharedAgentIds.length > 0) {
@@ -218,7 +215,7 @@ export const agentsRouter = {
 
       return {
         own: ownAgents.map(serializeAgent),
-        shared: sharedAgents.map(serializeAgent),
+        sharedWithMe: sharedAgents.map(serializeAgent),
       };
     }),
 
@@ -277,13 +274,15 @@ export const agentsRouter = {
         });
       }
 
-      // Admin can access any agent; non-admin requires shared + permission
+      // Admin can access any agent; non-admin requires active AgentShare or permission
       if (!admin) {
-        if (!agent.shared) {
-          throw new ORPCError("NOT_FOUND", {
-            message: "Agent not found",
-          });
-        }
+        const hasShare = await prisma.agentShare.findFirst({
+          where: {
+            agentId: agent.id,
+            userId,
+            active: true,
+          },
+        });
 
         const hasPermission = await prisma.agentPermission.findFirst({
           where: {
@@ -292,7 +291,7 @@ export const agentsRouter = {
           },
         });
 
-        if (!hasPermission) {
+        if (!hasShare && !hasPermission) {
           throw new ORPCError("NOT_FOUND", {
             message: "Agent not found",
           });
@@ -394,66 +393,6 @@ export const agentsRouter = {
       });
 
       return { success: true };
-    }),
-
-  share: protectedProcedure
-    .input(
-      z.object({
-        id: z.string(),
-      }),
-    )
-    .handler(async ({ input, context }) => {
-      const userId = context.session.user.id;
-      const admin = isAdmin(context);
-
-      const agent = await prisma.agent.findUnique({
-        where: { id: input.id },
-        select: { userId: true },
-      });
-
-      if (!agent || (!admin && agent.userId !== userId)) {
-        throw new ORPCError("NOT_FOUND", {
-          message: "Agent not found",
-        });
-      }
-
-      const updated = await prisma.agent.update({
-        where: { id: input.id },
-        data: { shared: true },
-        select: agentSelect,
-      });
-
-      return serializeAgent(updated);
-    }),
-
-  unshare: protectedProcedure
-    .input(
-      z.object({
-        id: z.string(),
-      }),
-    )
-    .handler(async ({ input, context }) => {
-      const userId = context.session.user.id;
-      const admin = isAdmin(context);
-
-      const agent = await prisma.agent.findUnique({
-        where: { id: input.id },
-        select: { userId: true },
-      });
-
-      if (!agent || (!admin && agent.userId !== userId)) {
-        throw new ORPCError("NOT_FOUND", {
-          message: "Agent not found",
-        });
-      }
-
-      const updated = await prisma.agent.update({
-        where: { id: input.id },
-        data: { shared: false },
-        select: agentSelect,
-      });
-
-      return serializeAgent(updated);
     }),
 
   setRateLimit: protectedProcedure

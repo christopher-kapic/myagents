@@ -35,7 +35,7 @@ export const permissionsRouter = {
       // Verify target agent exists
       const targetAgent = await prisma.agent.findUnique({
         where: { id: input.targetAgentId },
-        select: { userId: true, shared: true },
+        select: { userId: true },
       });
 
       if (!targetAgent) {
@@ -44,10 +44,10 @@ export const permissionsRouter = {
         });
       }
 
-      // Cross-user permission: target agent must be shared (admin can override)
-      if (!admin && targetAgent.userId !== userId && !targetAgent.shared) {
+      // Only the owner of the target agent can grant permissions to it (admin can override)
+      if (!admin && targetAgent.userId !== userId) {
         throw new ORPCError("FORBIDDEN", {
-          message: "Target agent is not shared and belongs to another user",
+          message: "Only the agent owner can grant permissions to it",
         });
       }
 

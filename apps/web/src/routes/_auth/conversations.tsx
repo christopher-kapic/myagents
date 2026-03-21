@@ -74,7 +74,7 @@ function ConversationsPage() {
 
   const agents = [
     ...((agentsQuery.data?.own ?? []) as Array<Record<string, unknown>>),
-    ...((agentsQuery.data?.shared ?? []) as Array<Record<string, unknown>>),
+    ...((agentsQuery.data?.sharedWithMe ?? []) as Array<Record<string, unknown>>),
   ];
 
   return (

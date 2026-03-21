@@ -4,6 +4,7 @@ import { env } from "@myagents/env/server";
 
 import { protectedProcedure, publicProcedure } from "../index";
 import { isSmtpConfigured } from "../lib/email";
+import { agentSharesRouter } from "./agentShares";
 import { agentsRouter } from "./agents";
 import { apiKeysRouter } from "./apiKeys";
 import { conversationsRouter, messagesRouter, queuedMessagesRouter } from "./conversations";
@@ -39,6 +40,7 @@ export const appRouter = {
   push: pushRouter,
   apiKeys: apiKeysRouter,
   agents: agentsRouter,
+  agentShares: agentSharesRouter,
   conversations: conversationsRouter,
   messages: messagesRouter,
   queuedMessages: queuedMessagesRouter,
