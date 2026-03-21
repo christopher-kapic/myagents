@@ -560,6 +560,7 @@ function ConversationPage() {
               key={msg.id}
               message={msg}
               renderMarkdown={agentData?.renderMarkdown !== false}
+              isHermes={agentData?.type === "hermes"}
             />
           ))}
 
@@ -800,12 +801,42 @@ function ConversationPage() {
   );
 }
 
+/**
+ * Separate hermes quiet-mode tool call lines from actual message content.
+ * Tool lines match patterns like "┊ 💻 $ git status 0.3s" or "┊ 🔍 search ..."
+ */
+function separateToolLines(content: string): {
+  toolLines: string[];
+  displayContent: string;
+} {
+  const lines = content.split("\n");
+  const toolLines: string[] = [];
+  const contentLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // Match hermes tool output: starts with ┊ (or skin prefix) followed by emoji + tool info + duration
+    if (/^┊\s/.test(trimmed) && /\d+\.\d+s\s*(\[.*\])?\s*$/.test(trimmed)) {
+      toolLines.push(trimmed);
+    } else {
+      contentLines.push(line);
+    }
+  }
+
+  // Trim leading/trailing blank lines from remaining content
+  const displayContent = contentLines.join("\n").trim();
+
+  return { toolLines, displayContent };
+}
+
 function MessageBubble({
   message,
   renderMarkdown = true,
+  isHermes = false,
 }: {
   message: ChatMessage;
   renderMarkdown?: boolean;
+  isHermes?: boolean;
 }) {
   const isUser = message.senderType === "user";
   const time = new Date(message.createdAt);
@@ -849,12 +880,35 @@ function MessageBubble({
   const [toolsExpanded, setToolsExpanded] = useState(false);
   const toolCount = (meta?.tools?.length ?? 0) + (meta?.skills?.length ?? 0);
 
+  // Separate inline tool call lines (e.g. "┊ 💻 $ git status 0.3s") from actual content
+  // Only applies to hermes agents which produce this format in quiet mode
+  const { toolLines, displayContent } = isHermes
+    ? separateToolLines(message.content)
+    : { toolLines: [], displayContent: message.content };
+  const [inlineToolsExpanded, setInlineToolsExpanded] = useState(false);
+
   return (
     <div className="flex items-start gap-3">
       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted shrink-0">
         <Bot className="h-4 w-4 text-muted-foreground" />
       </div>
       <div className="flex flex-col max-w-[80%]">
+        {toolLines.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setInlineToolsExpanded((v) => !v)}
+            className="mb-1 inline-flex items-center gap-1 self-start rounded-full bg-muted/60 px-2.5 py-1 text-[10px] text-muted-foreground hover:bg-muted transition-colors"
+          >
+            <Wrench className="h-2.5 w-2.5" />
+            <span>{toolLines.length} tool call{toolLines.length !== 1 ? "s" : ""}</span>
+            <ChevronDown className={`h-2.5 w-2.5 transition-transform ${inlineToolsExpanded ? "rotate-180" : ""}`} />
+          </button>
+        )}
+        {inlineToolsExpanded && toolLines.length > 0 && (
+          <div className="mb-1 rounded-lg bg-muted/40 border border-border/50 px-3 py-2 text-[10px] text-muted-foreground font-mono whitespace-pre-wrap">
+            {toolLines.join("\n")}
+          </div>
+        )}
         <div
           className={`rounded-2xl rounded-tl-sm px-4 py-2 ${
             message.error
@@ -865,7 +919,7 @@ function MessageBubble({
           {!isUser && renderMarkdown && !message.error ? (
             <div className="text-sm break-words prose prose-sm dark:prose-invert prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:my-2 prose-code:before:content-[''] prose-code:after:content-[''] max-w-none">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {message.content}
+                {displayContent}
               </ReactMarkdown>
             </div>
           ) : (
@@ -874,7 +928,7 @@ function MessageBubble({
                 message.error ? "text-destructive" : ""
               }`}
             >
-              {message.content}
+              {displayContent}
             </p>
           )}
         </div>
