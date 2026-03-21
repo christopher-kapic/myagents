@@ -382,7 +382,7 @@ export const conversationsRouter = {
 
       const conversation = await prisma.conversation.findUnique({
         where: { id: input.id },
-        select: { userId: true },
+        select: { userId: true, updatedAt: true },
       });
 
       if (!conversation || (!isAdmin(context) && conversation.userId !== userId)) {
@@ -393,7 +393,7 @@ export const conversationsRouter = {
 
       await prisma.conversation.update({
         where: { id: input.id },
-        data: { readAt: new Date() },
+        data: { readAt: new Date(), updatedAt: conversation.updatedAt },
       });
 
       return { success: true };
