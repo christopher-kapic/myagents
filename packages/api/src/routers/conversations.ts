@@ -645,6 +645,36 @@ export const queuedMessagesRouter = {
       return item;
     }),
 
+  update: protectedProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        content: z.string().min(1),
+      }),
+    )
+    .handler(async ({ input, context }) => {
+      const userId = context.session.user.id;
+
+      const item = await prisma.queuedMessage.findUnique({
+        where: { id: input.id },
+        select: { id: true, conversation: { select: { userId: true } } },
+      });
+
+      if (!item || (!isAdmin(context) && item.conversation.userId !== userId)) {
+        throw new ORPCError("NOT_FOUND", {
+          message: "Queued message not found",
+        });
+      }
+
+      const updated = await prisma.queuedMessage.update({
+        where: { id: input.id },
+        data: { content: input.content },
+        select: { id: true, content: true, position: true, createdAt: true },
+      });
+
+      return updated;
+    }),
+
   delete: protectedProcedure
     .input(
       z.object({

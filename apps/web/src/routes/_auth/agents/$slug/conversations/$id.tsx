@@ -25,6 +25,7 @@ import {
   Check,
   ChevronDown,
   Clock,
+  Copy,
   Download,
   FileJson,
   FileText,
@@ -172,6 +173,23 @@ function ConversationPage() {
       });
     },
   });
+
+  const updateQueueMutation = useMutation({
+    mutationFn: ({ queuedId, content }: { queuedId: string; content: string }) =>
+      orpc.queuedMessages.update.call({ id: queuedId, content }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: orpc.queuedMessages.list.queryOptions({
+          input: { conversationId: id },
+        }).queryKey,
+      });
+      setEditingQueueId(null);
+    },
+  });
+
+  const [editingQueueId, setEditingQueueId] = useState<string | null>(null);
+  const [editingQueueValue, setEditingQueueValue] = useState("");
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Insert transcribed text into input
   useTranscriptSync(voice.transcript, voice.reset, setInputValue, textareaRef);
@@ -586,22 +604,91 @@ function ConversationPage() {
         {queuedMessages.map((qm) => (
           <div key={qm.id} className="flex items-start gap-3 justify-end">
             <div className="flex flex-col items-end max-w-[80%]">
-              <div className="rounded-2xl rounded-tr-sm bg-primary/50 text-primary-foreground px-4 py-2 relative group">
-                <p className="text-sm whitespace-pre-wrap break-words opacity-70">
-                  {qm.content}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => deleteQueueMutation.mutate(qm.id)}
-                  className="absolute -top-2 -left-2 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center md:hidden md:group-hover:flex"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-              <span className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Queued
-              </span>
+              {editingQueueId === qm.id ? (
+                <div className="w-full min-w-[200px]">
+                  <textarea
+                    ref={editTextareaRef}
+                    value={editingQueueValue}
+                    onChange={(e) => setEditingQueueValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        const trimmed = editingQueueValue.trim();
+                        if (trimmed && trimmed !== qm.content) {
+                          updateQueueMutation.mutate({ queuedId: qm.id, content: trimmed });
+                        } else {
+                          setEditingQueueId(null);
+                        }
+                      } else if (e.key === "Escape") {
+                        setEditingQueueId(null);
+                      }
+                    }}
+                    className="w-full resize-none rounded-2xl rounded-tr-sm bg-primary/50 text-primary-foreground px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring min-h-[40px] max-h-[120px]"
+                    rows={1}
+                    onInput={(e) => {
+                      const target = e.target as HTMLTextAreaElement;
+                      target.style.height = "auto";
+                      target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
+                    }}
+                  />
+                  <div className="flex items-center gap-1 mt-1 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = editingQueueValue.trim();
+                        if (trimmed && trimmed !== qm.content) {
+                          updateQueueMutation.mutate({ queuedId: qm.id, content: trimmed });
+                        } else {
+                          setEditingQueueId(null);
+                        }
+                      }}
+                      disabled={updateQueueMutation.isPending}
+                      className="inline-flex items-center justify-center h-6 w-6 rounded hover:bg-accent"
+                    >
+                      <Check className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingQueueId(null)}
+                      className="inline-flex items-center justify-center h-6 w-6 rounded hover:bg-accent"
+                    >
+                      <X className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-2xl rounded-tr-sm bg-primary/50 text-primary-foreground px-4 py-2 relative group">
+                    <p className="text-sm whitespace-pre-wrap break-words opacity-70">
+                      {qm.content}
+                    </p>
+                    <div className="absolute -top-2 -left-2 flex items-center gap-0.5 md:hidden md:group-hover:flex">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingQueueId(qm.id);
+                          setEditingQueueValue(qm.content);
+                          setTimeout(() => editTextareaRef.current?.focus(), 0);
+                        }}
+                        className="h-5 w-5 rounded-full bg-muted text-muted-foreground flex items-center justify-center hover:bg-accent"
+                      >
+                        <Pencil className="h-2.5 w-2.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteQueueMutation.mutate(qm.id)}
+                        className="h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Queued
+                  </span>
+                </>
+              )}
             </div>
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 shrink-0">
               <User className="h-4 w-4 text-primary" />
@@ -847,16 +934,19 @@ function MessageBubble({
 
   if (isUser) {
     return (
-      <div className="flex items-start gap-3 justify-end">
+      <div className="flex items-start gap-3 justify-end group/msg">
         <div className="flex flex-col items-end max-w-[80%]">
-          <div className={`rounded-2xl rounded-tr-sm px-4 py-2 ${
-            message.pendingDelivery
-              ? "bg-primary/50 text-primary-foreground"
-              : "bg-primary text-primary-foreground"
-          }`}>
-            <p className="text-sm whitespace-pre-wrap break-words">
-              {message.content}
-            </p>
+          <div className="flex items-start gap-1">
+            <CopyButton text={message.content} className="opacity-0 group-hover/msg:opacity-100 transition-opacity shrink-0 mt-1" />
+            <div className={`rounded-2xl rounded-tr-sm px-4 py-2 ${
+              message.pendingDelivery
+                ? "bg-primary/50 text-primary-foreground"
+                : "bg-primary text-primary-foreground"
+            }`}>
+              <p className="text-sm whitespace-pre-wrap break-words">
+                {message.content}
+              </p>
+            </div>
           </div>
           <span className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
             {message.pendingDelivery ? (
@@ -888,7 +978,7 @@ function MessageBubble({
   const [inlineToolsExpanded, setInlineToolsExpanded] = useState(false);
 
   return (
-    <div className="flex items-start gap-3">
+    <div className="flex items-start gap-3 group/msg">
       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted shrink-0">
         <Bot className="h-4 w-4 text-muted-foreground" />
       </div>
@@ -917,8 +1007,20 @@ function MessageBubble({
           }`}
         >
           {!isUser && renderMarkdown && !message.error ? (
-            <div className="text-sm break-words prose prose-sm dark:prose-invert prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:my-2 prose-code:before:content-[''] prose-code:after:content-[''] max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <div className="text-sm break-words overflow-x-auto prose prose-sm dark:prose-invert prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-pre:my-2 prose-code:before:content-[''] prose-code:after:content-[''] max-w-none">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  pre({ children, ...props }) {
+                    return (
+                      <pre {...props} className="relative group/code">
+                        {children}
+                        <CopyCodeButton node={props.node} />
+                      </pre>
+                    );
+                  },
+                }}
+              >
                 {displayContent}
               </ReactMarkdown>
             </div>
@@ -986,7 +1088,7 @@ function MessageBubble({
             )}
           </div>
         )}
-        <span className="text-[10px] text-muted-foreground mt-1">
+        <span className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1">
           {timeStr}
           {message.pending && (
             <span className="ml-1 text-yellow-600 dark:text-yellow-400">
@@ -996,9 +1098,65 @@ function MessageBubble({
           {message.error && (
             <span className="ml-1 text-destructive">Error</span>
           )}
+          {!message.pending && (
+            <CopyButton text={displayContent} className="opacity-0 group-hover/msg:opacity-100 transition-opacity" />
+          )}
         </span>
       </div>
     </div>
+  );
+}
+
+function CopyButton({ text, className = "" }: { text: string; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      className={`inline-flex items-center justify-center h-6 w-6 rounded hover:bg-accent/50 transition-colors ${className}`}
+      title="Copy to clipboard"
+    >
+      {copied ? (
+        <Check className="h-3 w-3 text-green-500" />
+      ) : (
+        <Copy className="h-3 w-3 text-muted-foreground" />
+      )}
+    </button>
+  );
+}
+
+function CopyCodeButton({ node }: { node?: unknown }) {
+  // Extract text content from the <pre> AST node
+  const getCodeText = (): string => {
+    if (!node || typeof node !== "object") return "";
+    const n = node as { children?: Array<{ children?: Array<{ value?: string }> }> };
+    const codeChild = n.children?.[0];
+    if (!codeChild?.children) return "";
+    return codeChild.children.map((c) => c.value ?? "").join("");
+  };
+
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(getCodeText());
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      className="absolute top-2 right-2 hidden group-hover/code:inline-flex items-center justify-center h-6 w-6 rounded bg-background/80 hover:bg-background transition-colors"
+      title="Copy code"
+    >
+      {copied ? (
+        <Check className="h-3 w-3 text-green-500" />
+      ) : (
+        <Copy className="h-3 w-3 text-muted-foreground" />
+      )}
+    </button>
   );
 }
 
