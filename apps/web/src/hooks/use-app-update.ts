@@ -40,9 +40,15 @@ export function useAppUpdate() {
     // Then poll every 2 minutes
     timer = setInterval(check, POLL_INTERVAL);
 
-    // Reload when a new SW takes control
+    // Only reload on SW *update*, not first install.
+    // On first visit the page has no controller yet; controllerchange fires
+    // when the new SW claims the client — that's not an update.
+    const hadController = !!navigator.serviceWorker?.controller;
+
     function onControllerChange() {
-      window.location.reload();
+      if (hadController) {
+        window.location.reload();
+      }
     }
     navigator.serviceWorker?.addEventListener("controllerchange", onControllerChange);
 

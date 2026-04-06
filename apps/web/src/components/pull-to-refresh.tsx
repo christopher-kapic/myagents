@@ -10,11 +10,13 @@ const THRESHOLD = 80;
 const MAX_PULL = 128;
 
 export default function PullToRefresh({ onRefresh, children }: PullToRefreshProps) {
-  const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const pullDistanceRef = useRef(0);
   const touchStartY = useRef(0);
   const pulling = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const indicatorRef = useRef<HTMLDivElement>(null);
+  const spinnerRef = useRef<SVGSVGElement>(null);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     const container = containerRef.current;
@@ -28,33 +30,53 @@ export default function PullToRefresh({ onRefresh, children }: PullToRefreshProp
     const delta = e.touches[0].clientY - touchStartY.current;
     if (delta < 0) {
       pulling.current = false;
-      setPullDistance(0);
+      pullDistanceRef.current = 0;
+      if (indicatorRef.current) indicatorRef.current.style.height = "0px";
+      if (spinnerRef.current) {
+        spinnerRef.current.style.opacity = "0";
+        spinnerRef.current.style.transform = "rotate(0deg)";
+      }
       return;
     }
     // Dampen the pull distance
     const dampened = Math.min(delta * 0.5, MAX_PULL);
-    setPullDistance(dampened);
+    pullDistanceRef.current = dampened;
+    const indicator = indicatorRef.current;
+    const spinner = spinnerRef.current;
+    if (indicator) {
+      indicator.style.height = `${dampened}px`;
+    }
+    if (spinner) {
+      const progress = Math.min(dampened / THRESHOLD, 1);
+      spinner.style.opacity = String(progress);
+      spinner.style.transform = `rotate(${progress * 360}deg)`;
+    }
   }, []);
 
   const handleTouchEnd = useCallback(async () => {
-    if (!pulling.current && pullDistance === 0) return;
+    if (!pulling.current && pullDistanceRef.current === 0) return;
     pulling.current = false;
 
-    if (pullDistance >= THRESHOLD) {
+    if (pullDistanceRef.current >= THRESHOLD) {
       setRefreshing(true);
-      setPullDistance(THRESHOLD / 2);
+      pullDistanceRef.current = THRESHOLD / 2;
+      if (indicatorRef.current) indicatorRef.current.style.height = `${THRESHOLD / 2}px`;
       try {
         await onRefresh();
       } finally {
         setRefreshing(false);
-        setPullDistance(0);
+        pullDistanceRef.current = 0;
+        if (indicatorRef.current) indicatorRef.current.style.height = "0px";
       }
     } else {
-      setPullDistance(0);
+      pullDistanceRef.current = 0;
+      if (indicatorRef.current) indicatorRef.current.style.height = "0px";
+      if (spinnerRef.current) {
+        spinnerRef.current.style.opacity = "0";
+        spinnerRef.current.style.transform = "rotate(0deg)";
+      }
     }
-  }, [pullDistance, onRefresh]);
-
-  const progress = Math.min(pullDistance / THRESHOLD, 1);
+  }, [onRefresh]);
 
   return (
     <div
@@ -66,17 +88,19 @@ export default function PullToRefresh({ onRefresh, children }: PullToRefreshProp
     >
       {/* Pull indicator */}
       <div
+        ref={indicatorRef}
         className="flex items-center justify-center overflow-hidden transition-[height] duration-200"
         style={{
-          height: pullDistance > 0 || refreshing ? `${pullDistance}px` : 0,
+          height: 0,
           transitionDuration: pulling.current ? "0ms" : "200ms",
         }}
       >
         <Loader2
+          ref={spinnerRef}
           className="h-5 w-5 text-muted-foreground"
           style={{
-            opacity: progress,
-            transform: `rotate(${progress * 360}deg)`,
+            opacity: 0,
+            transform: "rotate(0deg)",
             animation: refreshing ? "spin 0.8s linear infinite" : "none",
           }}
         />

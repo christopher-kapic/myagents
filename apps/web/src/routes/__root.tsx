@@ -3,10 +3,8 @@ import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import type { AppRouterClient } from "@myagents/api/routers/index";
 import { Toaster } from "@myagents/ui/components/sonner";
 import type { QueryClient } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { HeadContent, Outlet, createRootRouteWithContext } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-import { useState } from "react";
+import { Suspense, lazy, useState } from "react";
 
 import BottomNav from "@/components/bottom-nav";
 import Header from "@/components/header";
@@ -17,6 +15,14 @@ import { useNavDirection } from "@/hooks/use-nav-direction";
 import { link, orpc } from "@/utils/orpc";
 
 import "../index.css";
+
+const TanStackRouterDevtools = import.meta.env.DEV
+  ? lazy(() => import("@tanstack/react-router-devtools").then(m => ({ default: m.TanStackRouterDevtools })))
+  : () => null;
+
+const ReactQueryDevtools = import.meta.env.DEV
+  ? lazy(() => import("@tanstack/react-query-devtools").then(m => ({ default: m.ReactQueryDevtools })))
+  : () => null;
 
 interface RouterAppContext {
   orpc: typeof orpc;
@@ -61,8 +67,9 @@ function RootComponent() {
         storageKey="vite-ui-theme"
       >
         <div
-          className={`grid h-svh ${mobileKeyboardOpen ? "grid-rows-[1fr]" : "grid-rows-[auto_1fr_auto] md:grid-rows-[auto_1fr]"}`}
+          className="grid h-svh grid-rows-[auto_1fr_auto] md:grid-rows-[auto_1fr]"
           style={{
+            gridTemplateRows: mobileKeyboardOpen ? "0fr 1fr 0fr" : undefined,
             paddingTop: mobileKeyboardOpen ? undefined : "var(--safe-area-top)",
             paddingLeft: "var(--safe-area-left)",
             paddingRight: "var(--safe-area-right)",
@@ -76,8 +83,10 @@ function RootComponent() {
         </div>
         <Toaster richColors position="top-right" />
       </ThemeProvider>
-      <TanStackRouterDevtools position="bottom-left" />
-      <ReactQueryDevtools position="bottom" buttonPosition="bottom-right" />
+      <Suspense>
+        <TanStackRouterDevtools position="bottom-left" />
+        <ReactQueryDevtools position="bottom" buttonPosition="bottom-right" />
+      </Suspense>
     </>
   );
 }

@@ -38,7 +38,7 @@ This app is a PWA targeting mobile-first. Treat it like a native app, not a webs
 - **Touch behavior**: `touch-action: manipulation` and `-webkit-tap-highlight-color: transparent` are applied globally in `globals.css`. Do not override.
 - **Overscroll**: `overscroll-behavior: none` is set globally. Do not add pull-to-navigate or rubber-band bounce.
 - **Safe areas**: Use `var(--safe-area-top)`, `var(--safe-area-bottom)`, etc. for edge-to-edge layouts on notched devices. These are defined in `globals.css`.
-- **Bottom nav**: Mobile navigation uses a fixed bottom tab bar (`BottomNav` component). The root layout adds `pb-14 md:pb-0` to account for it. Do not add a second nav bar.
+- **Bottom nav**: Mobile navigation uses a fixed bottom tab bar (`BottomNav` component). Do not add a second nav bar.
 - **Page transitions**: TanStack Router's `defaultViewTransition: true` is enabled. The `<main>` element has `viewTransitionName: "page"`. Transition CSS is in `globals.css`. Respect `prefers-reduced-motion`.
 - **Pull-to-refresh**: Use the `PullToRefresh` component (wraps content, calls `onRefresh` returning a Promise) for data-heavy pages.
 - **Haptic feedback**: Use `useHaptics()` hook (wraps `web-haptics/react`) for key interactions:
@@ -61,7 +61,7 @@ This app is a PWA targeting mobile-first. Treat it like a native app, not a webs
 
 These components are available in `packages/ui/src/components/`.
 
-For detailed overlay examples, loading states, resize animation, toast notifications (sileo), animated text (torph), autofill styling, nested radii, URL-as-state (nuqs), and optimistic updates, see solved problem `ui/shadcn/dashboard-conventions`.
+For detailed overlay examples, loading states, resize animation, toast notifications (sonner), autofill styling, nested radii, and optimistic updates, see solved problem `ui/shadcn/dashboard-conventions`.
 
 ### React — useEffect Policy
 
@@ -142,5 +142,7 @@ For full conventions including client plugins (CSRF, retry, batch), server-side 
 For spacing systems, typography scales, visual hierarchy, and shadow/border conventions, see solved problem `design/refactoring-ui-practices`.
 
 ### Prisma
+
+**Do NOT run `prisma migrate dev` or `db:migrate`.** The Docker container runs `prisma db push` on deploy. After schema changes, run `pnpm -F @myagents/db db:generate` to regenerate the client locally.
 
 For schema naming conventions, relationship patterns, and optimization strategies, see solved problem `prisma/schema-guidelines`.
